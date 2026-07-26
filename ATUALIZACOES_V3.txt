@@ -1,0 +1,16 @@
+FibraPRO North v3
+
+Correções desta versão:
+- Dark Fiber redesenhado no padrão do Backbone.
+- Cadastro usa somente Cliente (removido Nome do circuito duplicado).
+- Campo Contrato removido.
+- Cada circuito Dark Fiber possui página de detalhes, mapa e curvas OTDR.
+- Fotos adicionadas ao cadastro de CEOs.
+- Fotos adicionadas ao cadastro de Fusões.
+- FTTH: botão Nova rede funcionando.
+- FTTH: botão Abrir rede funcionando.
+- FTTH: página de detalhes com mapa.
+- FTTH: upload e download de arquivos KMZ/KML.
+
+Observação sobre KMZ:
+O arquivo é anexado e pode ser baixado. O mapa usa as coordenadas centrais cadastradas. A leitura automática do desenho interno do KMZ exigirá uma etapa adicional de conversão/parsing.

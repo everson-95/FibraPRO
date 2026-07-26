@@ -1,0 +1,21 @@
+FibraPRO North V4
+
+Correções desta versão:
+- Dark Fiber redesenhado no mesmo padrão visual dos cards do Backbone.
+- Botão vermelho com lixeira para excluir circuitos.
+- Página de detalhes do circuito com upload de KMZ e KML.
+- O conteúdo geográfico do KMZ/KML é lido no navegador e desenhado no mapa Leaflet.
+- Ajuste automático do zoom para enquadrar toda a rota carregada.
+- Lista de arquivos KMZ/KML com download e exclusão.
+- Ao excluir o arquivo, o traçado também é removido do mapa.
+- Curvas OTDR e coordenadas manuais foram preservadas.
+
+Como abrir:
+1. Extraia o ZIP.
+2. Abra a pasta fibrapro no VS Code.
+3. Execute npm install.
+4. Execute npm run dev.
+
+Observação:
+- A leitura de KMZ usa recursos atuais do navegador. Recomenda-se Chrome ou Edge atualizado.
+- Arquivos KML também são aceitos diretamente.

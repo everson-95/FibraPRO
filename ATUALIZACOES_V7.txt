@@ -1,0 +1,8 @@
+FibraPRO North v7
+
+- FTTH: botão Adicionar KMZ/KML movido para o cabeçalho do mapa.
+- FTTH: lista abaixo com baixar e excluir KMZ/KML.
+- FTTH: correção para recarregar arquivos salvos e exibir CTOs/cabos no mapa.
+- FTTH: proteção contra coordenadas inválidas (NaN).
+- Dark Fiber: circuitos agrupados em pastas por cliente (TIM, Vivo etc.).
+- Clientes Dedicados: página própria por circuito, mapa, KMZ/KML, download e exclusão.

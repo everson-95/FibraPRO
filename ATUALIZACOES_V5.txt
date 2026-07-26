@@ -1,0 +1,10 @@
+FibraPRO North v5 — correção do leitor KMZ/KML
+
+- Leitura de KMZ refeita com JSZip, compatível com arquivos compactados comuns do Google Earth.
+- Suporte a LineString, MultiGeometry, LinearRing, Point e gx:Track.
+- Suporte a namespaces KML/GX.
+- O mapa ajusta o zoom automaticamente ao traçado.
+- Após o upload, o sistema informa quantos trechos e pontos foram encontrados.
+- O arquivo original continua disponível para download e exclusão.
+
+Ao abrir esta versão pela primeira vez, execute npm install para instalar a dependência jszip.

@@ -1,0 +1,13 @@
+FibraPRO North v6 - Mapa FTTH profissional
+
+- CTOs, splitters, POPs/OLTs, CEOs, postes, clientes e rompimentos com símbolos e cores diferentes.
+- Cabos primários, distribuição, drops e outros cabos com cores e espessuras distintas.
+- Alternância entre OpenStreetMap, Satélite e Híbrido.
+- Painel de camadas para mostrar e ocultar tipos de elementos.
+- Botão Minha localização usando o GPS do navegador.
+- Botão Enquadrar rede.
+- Popup de cada ponto com opção Navegar até aqui pelo Google Maps.
+- Leitura automática dos KMZ/KML já salvos ao abrir a rede.
+- Resumo de CTOs, splitters, POPs/OLTs, postes e trechos identificados.
+- Upload e download do KMZ preservados.
+- Visual adaptado para computador e celular.

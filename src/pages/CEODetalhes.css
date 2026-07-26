@@ -1,0 +1,60 @@
+.paginaCEO{
+    padding:25px;
+}
+
+.cabecalhoCEO{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:25px;
+}
+
+.gridCEO{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(350px,1fr));
+    gap:20px;
+}
+
+.box{
+    background:#fff;
+    border-radius:10px;
+    padding:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+
+.box h2{
+    margin-top:0;
+}
+
+.box button{
+    margin-top:10px;
+    padding:10px 18px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.status{
+    padding:5px 10px;
+    border-radius:20px;
+    color:#fff;
+    font-size:12px;
+    font-weight:bold;
+}
+
+.status.operacional{
+    background:#28a745;
+}
+
+.status.atencao{
+    background:#ffc107;
+    color:#000;
+}
+
+.status.rompida{
+    background:#dc3545;
+}
+
+.status.desativada{
+    background:#6c757d;
+}
