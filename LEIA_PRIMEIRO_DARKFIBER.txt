@@ -1,0 +1,23 @@
+FIBRAPRO - CORREÇÃO DARK FIBER / FIREBASE
+
+Correções aplicadas:
+- src/pages/DarkFiber.jsx agora usa listarDarkFiber(), salvarDarkFiber() e excluirDarkFiber().
+- removida toda referência a observarDarkFiber.
+- após salvar ou excluir, a tela recarrega os dados do Firestore.
+- src/services/darkFiber.js usa a mesma arquitetura do serviço de CEOs.
+- src/firebase/firebase.js exporta db corretamente.
+
+IMPORTANTE PARA PUBLICAR NA VERCEL:
+1. Extraia este ZIP.
+2. Copie TODO o conteúdo para a pasta original ligada ao GitHub:
+   C:\Users\Infra\Desktop\NORTH\FibraPRO_North_v1\fibrapro_v6
+   Confirme que essa pasta contém a pasta oculta .git.
+3. No terminal dessa pasta execute:
+   npm install
+   npm run build
+   git add src/pages/DarkFiber.jsx src/services/darkFiber.js src/firebase/firebase.js
+   git commit -m "Corrige Dark Fiber Firebase"
+   git push
+4. Aguarde o novo deploy da Vercel ficar Ready.
+
+A coleção usada no Firestore é: darkFiber

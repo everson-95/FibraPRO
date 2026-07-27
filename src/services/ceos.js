@@ -52,6 +52,8 @@ export async function salvarCEO(dados) {
       maps: dados.maps || "",
 
       observacao: dados.observacao || "",
+      foto: dados.foto || "",
+      fotoNome: dados.fotoNome || "",
 
       criadoEm: new Date()
     }
