@@ -14,12 +14,12 @@ import {
 
 const colecao = collection(db, "darkFiber");
 
-// LISTAR
+// LISTAR TODOS
 export async function listarDarkFiber() {
 
   const q = query(
     colecao,
-    orderBy("rota")
+    orderBy("cliente")
   );
 
   const snapshot = await getDocs(q);
@@ -40,6 +40,7 @@ export async function salvarDarkFiber(dados) {
       cliente: dados.cliente || "",
       rota: dados.rota || "",
       fibras: dados.fibras || "",
+
       origem: dados.origem || "",
       destino: dados.destino || "",
 
@@ -82,7 +83,10 @@ export async function atualizarDarkFiber(id, dados) {
 
   const referencia = doc(db, "darkFiber", id);
 
-  await updateDoc(referencia, dados);
+  await updateDoc(
+    referencia,
+    dados
+  );
 
 }
 
