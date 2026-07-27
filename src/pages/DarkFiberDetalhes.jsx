@@ -8,60 +8,22 @@ import {
   Eye,
   FileArchive,
   MapPin,
-  Pencil,
   Plus,
-  Save,
   Trash2,
-  Upload,
-  X
+  Upload
 } from 'lucide-react';
 import MapaRota from '../components/mapa/MapaRota';
 import OtdrModal from '../components/OtdrModal';
-import {
-  atualizarDarkFiber,
-  buscarDarkFiber,
-  listarDarkFiber
-} from '../services/darkFiber';
+import { buscarDarkFiber, listarDarkFiber } from '../services/darkFiber';
 import { lerDados, salvarDados } from '../utils/localData';
-import { deleteFile, openStoredFile, saveFile } from '../utils/fileStore';
+import { deleteFile as deleteLocalFile, getFile, openStoredFile } from '../utils/fileStore';
 import { parseMapFile } from '../utils/kmz';
 import './DarkFiber.css';
-
-const camposVazios = {
-  cliente: '',
-  rota: '',
-  fibras: '',
-  origem: '',
-  destino: '',
-  latOrigem: '',
-  lngOrigem: '',
-  latDestino: '',
-  lngDestino: '',
-  cabo: '',
-  status: 'Em uso',
-  observacao: ''
-};
+import { criarCaminhoArquivo, deleteFile as deleteStorageFile, uploadFile } from '../services/storage';
+import { excluirAnexo, observarAnexos, salvarAnexo } from '../services/anexos';
 
 function coordenadaValida(valor) {
   return valor !== '' && valor !== null && valor !== undefined && Number.isFinite(Number(valor));
-}
-
-function normalizarFormulario(registro) {
-  return {
-    ...camposVazios,
-    cliente: registro?.cliente || '',
-    rota: registro?.rota || '',
-    fibras: registro?.fibras || '',
-    origem: registro?.origem || '',
-    destino: registro?.destino || '',
-    latOrigem: registro?.latOrigem || '',
-    lngOrigem: registro?.lngOrigem || '',
-    latDestino: registro?.latDestino || '',
-    lngDestino: registro?.lngDestino || '',
-    cabo: registro?.cabo || '',
-    status: registro?.status || 'Em uso',
-    observacao: registro?.observacao || ''
-  };
 }
 
 export default function DarkFiberDetalhes() {
@@ -70,12 +32,12 @@ export default function DarkFiberDetalhes() {
   const kmzKey = `fibrapro-darkfiber-kmz-${id}`;
 
   const [item, setItem] = useState(null);
-  const [form, setForm] = useState(camposVazios);
-  const [editando, setEditando] = useState(false);
-  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [carregando, setCarregando] = useState(true);
-  const [curvas, setCurvas] = useState(() => lerDados(metaKey));
-  const [mapFiles, setMapFiles] = useState(() => lerDados(kmzKey));
+  const [curvas, setCurvas] = useState([]);
+  const [mapFiles, setMapFiles] = useState([]);
+  const [curvasLocais, setCurvasLocais] = useState(() => lerDados(metaKey));
+  const [mapFilesLocais, setMapFilesLocais] = useState(() => lerDados(kmzKey));
+  const [migrando, setMigrando] = useState(false);
   const [modal, setModal] = useState(false);
   const [loadingKmz, setLoadingKmz] = useState(false);
   const inputKmz = useRef(null);
@@ -86,17 +48,21 @@ export default function DarkFiberDetalhes() {
     async function carregar() {
       try {
         const idLimpo = decodeURIComponent(String(id || '')).trim();
-        let registro = await buscarDarkFiber(idLimpo);
 
+        let registro = await buscarDarkFiber(idLimpo);
+        // Fallback: usa a mesma listagem que já funciona na tela principal.
         if (!registro) {
           const todos = await listarDarkFiber();
-          registro = todos.find(itemDark => String(itemDark.id) === idLimpo) || null;
+          registro =
+            todos.find(itemDark => String(itemDark.id) === idLimpo) ||
+            todos.find(
+              itemDark =>
+                String(itemDark.id).toLowerCase() === idLimpo.toLowerCase()
+            ) ||
+            null;
         }
 
-        if (ativo) {
-          setItem(registro);
-          setForm(normalizarFormulario(registro));
-        }
+        if (ativo) setItem(registro);
       } catch (erro) {
         console.error('Erro ao carregar circuito Dark Fiber:', erro);
         if (ativo) alert('Não foi possível carregar o circuito do Firebase.');
@@ -109,6 +75,29 @@ export default function DarkFiberDetalhes() {
 
     return () => {
       ativo = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const cancelarCurvas = observarAnexos(
+      'darkFiber',
+      id,
+      'OTDR',
+      setCurvas,
+      erro => console.error('Erro ao carregar curvas OTDR:', erro)
+    );
+
+    const cancelarKmz = observarAnexos(
+      'darkFiber',
+      id,
+      'KMZ',
+      setMapFiles,
+      erro => console.error('Erro ao carregar KMZ/KML:', erro)
+    );
+
+    return () => {
+      cancelarCurvas();
+      cancelarKmz();
     };
   }, [id]);
 
@@ -136,7 +125,12 @@ export default function DarkFiberDetalhes() {
     return pontos;
   }, [item]);
 
-  const kmzPoints = mapFiles.flatMap(arquivo =>
+  const todosMapFiles = [
+    ...mapFiles,
+    ...mapFilesLocais.map(arquivo => ({ ...arquivo, local: true }))
+  ];
+
+  const kmzPoints = todosMapFiles.flatMap(arquivo =>
     (arquivo.markers || []).map(marcador => ({
       label: marcador.name,
       description: marcador.description,
@@ -144,78 +138,83 @@ export default function DarkFiberDetalhes() {
     }))
   );
 
-  const tracks = mapFiles.flatMap(arquivo => arquivo.tracks || []);
+  const tracks = todosMapFiles.flatMap(arquivo => arquivo.tracks || []);
   const points = kmzPoints.length ? kmzPoints : coordinatePoints;
 
-  function atualizarCampo(campo, valor) {
-    setForm(atual => ({ ...atual, [campo]: valor }));
-  }
-
-  function iniciarEdicao() {
-    setForm(normalizarFormulario(item));
-    setEditando(true);
-  }
-
-  function cancelarEdicao() {
-    setForm(normalizarFormulario(item));
-    setEditando(false);
-  }
-
-  async function salvarEdicao(evento) {
-    evento.preventDefault();
-
-    if (!form.cliente.trim()) return alert('Informe o cliente.');
-    if (!form.rota.trim()) return alert('Informe a rota.');
-
-    setSalvandoEdicao(true);
-
-    try {
-      const dados = {
-        ...form,
-        cliente: form.cliente.trim(),
-        rota: form.rota.trim()
-      };
-
-      await atualizarDarkFiber(id, dados);
-      const atualizado = { ...item, ...dados, id: item.id };
-      setItem(atualizado);
-      setForm(normalizarFormulario(atualizado));
-      setEditando(false);
-      alert('Alterações salvas com sucesso.');
-    } catch (erro) {
-      console.error('Erro ao atualizar circuito Dark Fiber:', erro);
-      alert('Não foi possível salvar as alterações.');
-    } finally {
-      setSalvandoEdicao(false);
-    }
-  }
-
   async function salvarCurva(dados) {
-    const arquivoId = `dark-${id}-${Date.now()}`;
-    await saveFile(arquivoId, dados.arquivo);
+    try {
+      const storagePath = criarCaminhoArquivo(
+        'darkFiber',
+        id,
+        'otdr',
+        dados.arquivo.name
+      );
 
-    const curva = {
-      ...dados,
-      id: arquivoId,
-      arquivoNome: dados.arquivo.name,
-      arquivoTipo: dados.arquivo.type,
-      arquivoTamanho: dados.arquivo.size,
-      arquivo: null,
-      criadoEm: new Date().toISOString()
-    };
+      const upload = await uploadFile(storagePath, dados.arquivo);
 
-    const next = [curva, ...curvas];
-    setCurvas(next);
-    salvarDados(metaKey, next);
-    setModal(false);
+      await salvarAnexo({
+        parentType: 'darkFiber',
+        parentId: id,
+        categoria: 'OTDR',
+        fibra: dados.fibra,
+        sentido: dados.sentido,
+        comprimentoOnda: dados.comprimentoOnda,
+        distancia: dados.distancia,
+        perdaTotal: dados.perdaTotal,
+        dataMedicao: dados.dataMedicao,
+        equipamento: dados.equipamento,
+        observacao: dados.observacao,
+        nome: dados.arquivo.name,
+        tipo: dados.arquivo.type || '',
+        tamanho: dados.arquivo.size,
+        url: upload.url,
+        storagePath: upload.path
+      });
+
+      setModal(false);
+    } catch (erro) {
+      console.error('Erro ao salvar curva OTDR:', erro);
+      alert(erro.message || 'Não foi possível enviar a curva OTDR.');
+    }
   }
 
   async function excluirCurva(curva) {
     if (!confirm('Excluir esta curva?')) return;
-    await deleteFile(curva.id);
-    const next = curvas.filter(itemCurva => itemCurva.id !== curva.id);
-    setCurvas(next);
-    salvarDados(metaKey, next);
+
+    try {
+      if (curva.local) {
+        await deleteLocalFile(curva.id);
+        const next = curvasLocais.filter(itemCurva => itemCurva.id !== curva.id);
+        setCurvasLocais(next);
+        salvarDados(metaKey, next);
+        return;
+      }
+
+      await deleteStorageFile(curva.storagePath);
+      await excluirAnexo(curva.id);
+    } catch (erro) {
+      console.error('Erro ao excluir curva:', erro);
+      alert('Não foi possível excluir a curva.');
+    }
+  }
+
+  async function abrirCurva(curva, baixar = false) {
+    if (curva.local) {
+      await openStoredFile(curva.id, baixar ? curva.arquivoNome : undefined);
+      return;
+    }
+
+    if (baixar) {
+      const link = document.createElement('a');
+      link.href = curva.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = curva.nome || 'curva-otdr';
+      link.click();
+      return;
+    }
+
+    window.open(curva.url, '_blank', 'noopener,noreferrer');
   }
 
   async function enviarKmz(event) {
@@ -227,26 +226,26 @@ export default function DarkFiberDetalhes() {
 
     try {
       const parsed = await parseMapFile(file);
-      const arquivoId = `dark-kmz-${id}-${Date.now()}`;
-      await saveFile(arquivoId, file);
+      const storagePath = criarCaminhoArquivo('darkFiber', id, 'kmz', file.name);
+      const upload = await uploadFile(storagePath, file);
 
-      const registro = {
-        id: arquivoId,
+      await salvarAnexo({
+        parentType: 'darkFiber',
+        parentId: id,
+        categoria: 'KMZ',
         nome: file.name,
         tamanho: file.size,
-        tipo: file.type,
-        criadoEm: new Date().toISOString(),
+        tipo: file.type || '',
+        url: upload.url,
+        storagePath: upload.path,
         tracks: parsed.tracks,
         markers: parsed.markers
-      };
+      });
 
-      const next = [registro, ...mapFiles];
-      setMapFiles(next);
-      salvarDados(kmzKey, next);
       alert(`Arquivo carregado: ${parsed.tracks.length} trecho(s) e ${parsed.markers.length} ponto(s) encontrados.`);
     } catch (erro) {
       console.error('Erro ao processar KMZ/KML:', erro);
-      alert(erro.message || 'Não foi possível ler o arquivo.');
+      alert(erro.message || 'Não foi possível ler ou enviar o arquivo.');
     } finally {
       setLoadingKmz(false);
     }
@@ -254,11 +253,107 @@ export default function DarkFiberDetalhes() {
 
   async function excluirKmz(arquivo) {
     if (!confirm('Excluir este KMZ/KML e removê-lo do mapa?')) return;
-    await deleteFile(arquivo.id);
-    const next = mapFiles.filter(itemArquivo => itemArquivo.id !== arquivo.id);
-    setMapFiles(next);
-    salvarDados(kmzKey, next);
+
+    try {
+      if (arquivo.local) {
+        await deleteLocalFile(arquivo.id);
+        const next = mapFilesLocais.filter(itemArquivo => itemArquivo.id !== arquivo.id);
+        setMapFilesLocais(next);
+        salvarDados(kmzKey, next);
+        return;
+      }
+
+      await deleteStorageFile(arquivo.storagePath);
+      await excluirAnexo(arquivo.id);
+    } catch (erro) {
+      console.error('Erro ao excluir KMZ/KML:', erro);
+      alert('Não foi possível excluir o arquivo.');
+    }
   }
+
+  async function abrirKmz(arquivo) {
+    if (arquivo.local) {
+      await openStoredFile(arquivo.id, arquivo.nome);
+      return;
+    }
+
+    window.open(arquivo.url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function migrarArquivosLocais() {
+    if (migrando) return;
+    setMigrando(true);
+
+    try {
+      for (const curva of curvasLocais) {
+        const file = await getFile(curva.id);
+        if (!file) continue;
+
+        const storagePath = criarCaminhoArquivo('darkFiber', id, 'otdr', curva.arquivoNome || file.name);
+        const upload = await uploadFile(storagePath, file);
+
+        await salvarAnexo({
+          parentType: 'darkFiber',
+          parentId: id,
+          categoria: 'OTDR',
+          fibra: curva.fibra || '',
+          sentido: curva.sentido || '',
+          comprimentoOnda: curva.comprimentoOnda || '',
+          distancia: curva.distancia || '',
+          perdaTotal: curva.perdaTotal || '',
+          dataMedicao: curva.dataMedicao || '',
+          equipamento: curva.equipamento || '',
+          observacao: curva.observacao || '',
+          nome: curva.arquivoNome || file.name,
+          tipo: curva.arquivoTipo || file.type || '',
+          tamanho: curva.arquivoTamanho || file.size,
+          url: upload.url,
+          storagePath: upload.path
+        });
+
+        await deleteLocalFile(curva.id);
+      }
+
+      for (const arquivo of mapFilesLocais) {
+        const file = await getFile(arquivo.id);
+        if (!file) continue;
+
+        const storagePath = criarCaminhoArquivo('darkFiber', id, 'kmz', arquivo.nome || file.name);
+        const upload = await uploadFile(storagePath, file);
+
+        await salvarAnexo({
+          parentType: 'darkFiber',
+          parentId: id,
+          categoria: 'KMZ',
+          nome: arquivo.nome || file.name,
+          tamanho: arquivo.tamanho || file.size,
+          tipo: arquivo.tipo || file.type || '',
+          url: upload.url,
+          storagePath: upload.path,
+          tracks: arquivo.tracks || [],
+          markers: arquivo.markers || []
+        });
+
+        await deleteLocalFile(arquivo.id);
+      }
+
+      setCurvasLocais([]);
+      setMapFilesLocais([]);
+      salvarDados(metaKey, []);
+      salvarDados(kmzKey, []);
+      alert('Arquivos locais migrados para a nuvem.');
+    } catch (erro) {
+      console.error('Erro ao migrar arquivos locais:', erro);
+      alert('A migração foi interrompida. Os arquivos não migrados continuam neste dispositivo.');
+    } finally {
+      setMigrando(false);
+    }
+  }
+
+  const todasCurvas = [
+    ...curvas,
+    ...curvasLocais.map(curva => ({ ...curva, local: true }))
+  ];
 
   if (carregando) {
     return (
@@ -290,79 +385,34 @@ export default function DarkFiberDetalhes() {
           <h1>{item.cliente}</h1>
           <p>{item.rota} · {item.origem || 'Origem'} → {item.destino || 'Destino'}</p>
         </div>
-
-        <div className="dark-header-actions">
-          <span className="dark-status">{item.status}</span>
-          {!editando && (
-            <button className="botao-editar-dark" type="button" onClick={iniciarEdicao}>
-              <Pencil size={17} /> Editar
-            </button>
-          )}
-        </div>
+        <span className="dark-status">{item.status}</span>
       </header>
 
-      {editando ? (
-        <form className="dark-panel dark-edit-form" onSubmit={salvarEdicao}>
-          <div className="dark-section-head">
+      <div className="dark-detail-grid">
+        <section className="dark-panel">
+          <h2><Cable size={20} /> Informações</h2>
+          <dl>
+            <div><dt>Cliente</dt><dd>{item.cliente}</dd></div>
+            <div><dt>Fibras</dt><dd>{item.fibras || '—'}</dd></div>
+            <div><dt>Cabo</dt><dd>{item.cabo || '—'}</dd></div>
+            <div><dt>Observações</dt><dd>{item.observacao || '—'}</dd></div>
+          </dl>
+        </section>
+
+        <section className="dark-panel">
+          <h2><MapPin size={20} /> Coordenadas</h2>
+          <dl>
             <div>
-              <h2><Pencil size={20} /> Editar circuito</h2>
-              <p>Altere os dados abaixo sem perder KMZ ou curvas OTDR.</p>
+              <dt>Origem</dt>
+              <dd>{coordenadaValida(item.latOrigem) && coordenadaValida(item.lngOrigem) ? `${item.latOrigem}, ${item.lngOrigem}` : 'Não informada'}</dd>
             </div>
-          </div>
-
-          <div className="dark-edit-grid">
-            <label><span>Cliente *</span><input value={form.cliente} onChange={e => atualizarCampo('cliente', e.target.value)} /></label>
-            <label><span>Rota *</span><input value={form.rota} onChange={e => atualizarCampo('rota', e.target.value)} /></label>
-            <label><span>Fibras utilizadas</span><input value={form.fibras} onChange={e => atualizarCampo('fibras', e.target.value)} /></label>
-            <label><span>Cabo</span><input value={form.cabo} onChange={e => atualizarCampo('cabo', e.target.value)} /></label>
-            <label><span>Origem</span><input value={form.origem} onChange={e => atualizarCampo('origem', e.target.value)} /></label>
-            <label><span>Destino</span><input value={form.destino} onChange={e => atualizarCampo('destino', e.target.value)} /></label>
-            <label><span>Latitude da origem</span><input value={form.latOrigem} onChange={e => atualizarCampo('latOrigem', e.target.value)} /></label>
-            <label><span>Longitude da origem</span><input value={form.lngOrigem} onChange={e => atualizarCampo('lngOrigem', e.target.value)} /></label>
-            <label><span>Latitude do destino</span><input value={form.latDestino} onChange={e => atualizarCampo('latDestino', e.target.value)} /></label>
-            <label><span>Longitude do destino</span><input value={form.lngDestino} onChange={e => atualizarCampo('lngDestino', e.target.value)} /></label>
-            <label>
-              <span>Status</span>
-              <select value={form.status} onChange={e => atualizarCampo('status', e.target.value)}>
-                <option>Em uso</option>
-                <option>Reservada</option>
-                <option>Manutenção</option>
-                <option>Encerrada</option>
-              </select>
-            </label>
-            <label className="full"><span>Observações</span><textarea value={form.observacao} onChange={e => atualizarCampo('observacao', e.target.value)} /></label>
-          </div>
-
-          <div className="dark-edit-actions">
-            <button type="button" className="botao-secundario" onClick={cancelarEdicao} disabled={salvandoEdicao}>
-              <X size={17} /> Cancelar
-            </button>
-            <button type="submit" className="botao-primario" disabled={salvandoEdicao}>
-              <Save size={17} /> {salvandoEdicao ? 'Salvando...' : 'Salvar alterações'}
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="dark-detail-grid">
-          <section className="dark-panel">
-            <h2><Cable size={20} /> Informações</h2>
-            <dl>
-              <div><dt>Cliente</dt><dd>{item.cliente}</dd></div>
-              <div><dt>Fibras</dt><dd>{item.fibras || '—'}</dd></div>
-              <div><dt>Cabo</dt><dd>{item.cabo || '—'}</dd></div>
-              <div><dt>Observações</dt><dd>{item.observacao || '—'}</dd></div>
-            </dl>
-          </section>
-
-          <section className="dark-panel">
-            <h2><MapPin size={20} /> Coordenadas</h2>
-            <dl>
-              <div><dt>Origem</dt><dd>{coordenadaValida(item.latOrigem) && coordenadaValida(item.lngOrigem) ? `${item.latOrigem}, ${item.lngOrigem}` : 'Não informada'}</dd></div>
-              <div><dt>Destino</dt><dd>{coordenadaValida(item.latDestino) && coordenadaValida(item.lngDestino) ? `${item.latDestino}, ${item.lngDestino}` : 'Não informada'}</dd></div>
-            </dl>
-          </section>
-        </div>
-      )}
+            <div>
+              <dt>Destino</dt>
+              <dd>{coordenadaValida(item.latDestino) && coordenadaValida(item.lngDestino) ? `${item.latDestino}, ${item.lngDestino}` : 'Não informada'}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
 
       <section className="dark-panel">
         <div className="dark-section-head">
@@ -370,31 +420,62 @@ export default function DarkFiberDetalhes() {
             <h2><MapPin size={20} /> Mapa do circuito</h2>
             <p>O KMZ/KML carregado é desenhado diretamente neste mapa.</p>
           </div>
-          <button className="botao-primario" onClick={() => inputKmz.current?.click()} disabled={loadingKmz}>
+          <button
+            className="botao-primario"
+            onClick={() => inputKmz.current?.click()}
+            disabled={loadingKmz}
+          >
             <Upload size={17} /> {loadingKmz ? 'Processando...' : 'Adicionar KMZ/KML'}
           </button>
-          <input ref={inputKmz} type="file" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml" hidden onChange={enviarKmz} />
+          <input
+            ref={inputKmz}
+            type="file"
+            accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml"
+            hidden
+            onChange={enviarKmz}
+          />
         </div>
 
         <MapaRota points={points} tracks={tracks} />
 
-        {mapFiles.length > 0 && (
+        {todosMapFiles.length > 0 && (
           <div className="kmz-list">
-            {mapFiles.map(arquivo => (
+            {todosMapFiles.map(arquivo => (
               <article key={arquivo.id}>
                 <div>
                   <FileArchive size={18} />
-                  <span><strong>{arquivo.nome}</strong><small>{(arquivo.tracks || []).length} trecho(s) · {(arquivo.markers || []).length} ponto(s)</small></span>
+                  <span>
+                    <strong>{arquivo.nome}</strong>
+                    <small>{(arquivo.tracks || []).length} trecho(s) · {(arquivo.markers || []).length} ponto(s)</small>
+                  </span>
                 </div>
                 <div>
-                  <button onClick={() => openStoredFile(arquivo.id, arquivo.nome)} title="Baixar KMZ/KML"><Download size={17} /></button>
-                  <button className="danger" onClick={() => excluirKmz(arquivo)} title="Excluir"><Trash2 size={17} /></button>
+                  <button onClick={() => abrirKmz(arquivo)} title="Abrir KMZ/KML">
+                    <Download size={17} />
+                  </button>
+                  <button className="danger" onClick={() => excluirKmz(arquivo)} title="Excluir">
+                    <Trash2 size={17} />
+                  </button>
                 </div>
               </article>
             ))}
           </div>
         )}
       </section>
+
+      {(curvasLocais.length > 0 || mapFilesLocais.length > 0) && (
+        <section className="dark-panel dark-migration-panel">
+          <div>
+            <h2>Arquivos salvos apenas neste notebook</h2>
+            <p>
+              Migre as curvas e os mapas antigos para que também apareçam no celular e em outros computadores.
+            </p>
+          </div>
+          <button className="botao-primario" onClick={migrarArquivosLocais} disabled={migrando}>
+            <Upload size={17} /> {migrando ? 'Migrando...' : 'Migrar para a nuvem'}
+          </button>
+        </section>
+      )}
 
       <section className="dark-panel">
         <div className="dark-section-head">
@@ -402,20 +483,36 @@ export default function DarkFiberDetalhes() {
             <h2><Activity size={20} /> Curvas OTDR</h2>
             <p>Cadastre medições nos dois sentidos do circuito.</p>
           </div>
-          <button className="botao-primario" onClick={() => setModal(true)}><Plus size={17} /> Adicionar curva</button>
+          <button className="botao-primario" onClick={() => setModal(true)}>
+            <Plus size={17} /> Adicionar curva
+          </button>
         </div>
 
-        {curvas.length === 0 ? (
-          <div className="dark-empty compact"><Activity size={38} /><h3>Nenhuma curva OTDR</h3></div>
+        {todasCurvas.length === 0 ? (
+          <div className="dark-empty compact">
+            <Activity size={38} />
+            <h3>Nenhuma curva OTDR</h3>
+          </div>
         ) : (
           <div className="otdr-simple-list">
-            {curvas.map(curva => (
+            {todasCurvas.map(curva => (
               <article key={curva.id}>
-                <div><strong>{curva.fibra} · {curva.comprimentoOnda} nm</strong><span>{curva.sentido}</span><small>{curva.arquivoNome}</small></div>
                 <div>
-                  <button onClick={() => openStoredFile(curva.id)} title="Visualizar"><Eye size={17} /></button>
-                  <button onClick={() => openStoredFile(curva.id, curva.arquivoNome)} title="Baixar"><Download size={17} /></button>
-                  <button className="danger" onClick={() => excluirCurva(curva)}><Trash2 size={17} /></button>
+                  <strong>{curva.fibra} · {curva.comprimentoOnda} nm</strong>
+                  <span>{curva.sentido}</span>
+                  <small>{curva.nome || curva.arquivoNome}</small>
+                  {curva.local && <small>Somente neste dispositivo</small>}
+                </div>
+                <div>
+                  <button onClick={() => abrirCurva(curva)} title="Visualizar">
+                    <Eye size={17} />
+                  </button>
+                  <button onClick={() => abrirCurva(curva, true)} title="Baixar">
+                    <Download size={17} />
+                  </button>
+                  <button className="danger" onClick={() => excluirCurva(curva)}>
+                    <Trash2 size={17} />
+                  </button>
                 </div>
               </article>
             ))}
@@ -423,7 +520,13 @@ export default function DarkFiberDetalhes() {
         )}
       </section>
 
-      <OtdrModal aberto={modal} aoFechar={() => setModal(false)} aoSalvar={salvarCurva} origem={item.origem || 'Origem'} destino={item.destino || 'Destino'} />
+      <OtdrModal
+        aberto={modal}
+        aoFechar={() => setModal(false)}
+        aoSalvar={salvarCurva}
+        origem={item.origem || 'Origem'}
+        destino={item.destino || 'Destino'}
+      />
     </div>
   );
 }

@@ -1,0 +1,32 @@
+FIBRAPRO - DARK FIBER COM FIREBASE STORAGE
+
+Arquivos alterados:
+- src/firebase/firebase.js
+- src/services/storage.js
+- src/services/anexos.js
+- src/pages/DarkFiberDetalhes.jsx
+- src/pages/DarkFiber.css
+
+O que mudou:
+- Novas curvas OTDR são enviadas ao Firebase Storage.
+- Metadados das curvas são salvos na coleção Firestore "anexos".
+- KMZ/KML também são enviados ao Firebase Storage.
+- Curvas e KMZ passam a aparecer em notebook, celular e outros dispositivos.
+- Arquivos antigos salvos apenas no navegador podem ser migrados pelo botão "Migrar para a nuvem".
+
+Como testar:
+1. Extraia este projeto em uma pasta nova.
+2. Rode: npm install
+3. Rode: npm run build
+4. Rode: npm run dev
+5. Abra um circuito Dark Fiber e envie uma curva OTDR.
+6. Confira em Firebase Storage > Arquivos e Firestore > anexos.
+7. Abra o mesmo circuito no celular.
+
+Para publicar na pasta original com .git, copie os 5 arquivos alterados para ela e rode:
+
+git add src/firebase/firebase.js src/services/storage.js src/services/anexos.js src/pages/DarkFiberDetalhes.jsx src/pages/DarkFiber.css
+git commit -m "Migra OTDR e KMZ do Dark Fiber para Firebase Storage"
+git push
+
+Observação: mantenha as regras do Storage publicadas para o teste atual. Depois será necessário adicionar autenticação e restringir as regras.
