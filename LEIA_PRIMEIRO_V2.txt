@@ -1,0 +1,26 @@
+FIBRAPRO V2 - RESTAURACAO E MELHORIAS
+
+Esta versao inclui:
+- Tela completa de Rotas/Backbone restaurada.
+- Botao Editar restaurado no Dark Fiber.
+- Edicao dos dados do circuito sem criar novo cadastro.
+- Campos de DIO e porta do DIO nas duas pontas.
+- Fotos do circuito salvas no Firebase Storage.
+- Curvas OTDR e KMZ continuam sincronizados pelo Firebase.
+
+TESTE EM PASTA NOVA:
+1. Extraia o ZIP.
+2. Abra a pasta fibrapro_v6 no VS Code.
+3. Execute npm install.
+4. Execute npm run dev.
+5. Teste Dark Fiber e Backbone.
+
+PARA PUBLICAR:
+Copie os arquivos testados para o projeto original que possui a pasta .git.
+Depois execute:
+  git add .
+  git commit -m "Restaura Backbone e adiciona edicao DIO e fotos"
+  git push
+
+OBSERVACAO:
+O Firebase Storage deve permanecer ativo e com regras permitindo o acesso usado pelo sistema.

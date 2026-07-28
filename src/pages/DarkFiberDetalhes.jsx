@@ -10,11 +10,15 @@ import {
   MapPin,
   Plus,
   Trash2,
-  Upload
+  Upload,
+  Pencil,
+  Save,
+  X,
+  Camera
 } from 'lucide-react';
 import MapaRota from '../components/mapa/MapaRota';
 import OtdrModal from '../components/OtdrModal';
-import { buscarDarkFiber, listarDarkFiber } from '../services/darkFiber';
+import { atualizarDarkFiber, buscarDarkFiber, listarDarkFiber } from '../services/darkFiber';
 import { lerDados, salvarDados } from '../utils/localData';
 import { deleteFile as deleteLocalFile, getFile, openStoredFile } from '../utils/fileStore';
 import { parseMapFile } from '../utils/kmz';
@@ -40,7 +44,13 @@ export default function DarkFiberDetalhes() {
   const [migrando, setMigrando] = useState(false);
   const [modal, setModal] = useState(false);
   const [loadingKmz, setLoadingKmz] = useState(false);
+  const [fotos, setFotos] = useState([]);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [formulario, setFormulario] = useState({});
   const inputKmz = useRef(null);
+  const inputFoto = useRef(null);
 
   useEffect(() => {
     let ativo = true;
@@ -62,7 +72,10 @@ export default function DarkFiberDetalhes() {
             null;
         }
 
-        if (ativo) setItem(registro);
+        if (ativo) {
+          setItem(registro);
+          setFormulario(registro || {});
+        }
       } catch (erro) {
         console.error('Erro ao carregar circuito Dark Fiber:', erro);
         if (ativo) alert('Não foi possível carregar o circuito do Firebase.');
@@ -78,7 +91,10 @@ export default function DarkFiberDetalhes() {
     };
   }, [id]);
 
+
   useEffect(() => {
+    if (!id) return undefined;
+
     const cancelarCurvas = observarAnexos(
       'darkFiber',
       id,
@@ -95,9 +111,18 @@ export default function DarkFiberDetalhes() {
       erro => console.error('Erro ao carregar KMZ/KML:', erro)
     );
 
+    const cancelarFotos = observarAnexos(
+      'darkFiber',
+      id,
+      'FOTO',
+      setFotos,
+      erro => console.error('Erro ao carregar fotos:', erro)
+    );
+
     return () => {
       cancelarCurvas();
       cancelarKmz();
+      cancelarFotos();
     };
   }, [id]);
 
@@ -350,6 +375,102 @@ export default function DarkFiberDetalhes() {
     }
   }
 
+
+  function alterarFormulario(evento) {
+    const { name, value } = evento.target;
+    setFormulario(anterior => ({ ...anterior, [name]: value }));
+  }
+
+  function iniciarEdicao() {
+    setFormulario(item || {});
+    setEditando(true);
+  }
+
+  function cancelarEdicao() {
+    setFormulario(item || {});
+    setEditando(false);
+  }
+
+  async function salvarEdicao(evento) {
+    evento.preventDefault();
+    setSalvandoEdicao(true);
+
+    try {
+      const dados = {
+        cliente: formulario.cliente || '',
+        rota: formulario.rota || '',
+        fibras: formulario.fibras || '',
+        cabo: formulario.cabo || '',
+        origem: formulario.origem || '',
+        destino: formulario.destino || '',
+        latOrigem: formulario.latOrigem || '',
+        lngOrigem: formulario.lngOrigem || '',
+        latDestino: formulario.latDestino || '',
+        lngDestino: formulario.lngDestino || '',
+        status: formulario.status || 'Em uso',
+        observacao: formulario.observacao || '',
+        dioOrigem: formulario.dioOrigem || '',
+        portaDioOrigem: formulario.portaDioOrigem || '',
+        dioDestino: formulario.dioDestino || '',
+        portaDioDestino: formulario.portaDioDestino || ''
+      };
+
+      await atualizarDarkFiber(id, dados);
+      setItem(anterior => ({ ...anterior, ...dados }));
+      setFormulario(anterior => ({ ...anterior, ...dados }));
+      setEditando(false);
+      alert('Circuito atualizado com sucesso.');
+    } catch (erro) {
+      console.error('Erro ao atualizar circuito:', erro);
+      alert('Não foi possível salvar as alterações.');
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
+
+  async function enviarFoto(evento) {
+    const arquivo = evento.target.files?.[0];
+    evento.target.value = '';
+    if (!arquivo) return;
+
+    if (!arquivo.type.startsWith('image/')) {
+      alert('Selecione uma imagem.');
+      return;
+    }
+
+    setUploadingFoto(true);
+    try {
+      const storagePath = criarCaminhoArquivo('darkFiber', id, 'fotos', arquivo.name);
+      const upload = await uploadFile(storagePath, arquivo);
+      await salvarAnexo({
+        parentType: 'darkFiber',
+        parentId: id,
+        categoria: 'FOTO',
+        nome: arquivo.name,
+        tipo: arquivo.type,
+        tamanho: arquivo.size,
+        url: upload.url,
+        storagePath: upload.path
+      });
+    } catch (erro) {
+      console.error('Erro ao enviar foto:', erro);
+      alert('Não foi possível enviar a foto.');
+    } finally {
+      setUploadingFoto(false);
+    }
+  }
+
+  async function excluirFoto(foto) {
+    if (!confirm('Excluir esta foto?')) return;
+    try {
+      await deleteStorageFile(foto.storagePath);
+      await excluirAnexo(foto.id);
+    } catch (erro) {
+      console.error('Erro ao excluir foto:', erro);
+      alert('Não foi possível excluir a foto.');
+    }
+  }
+
   const todasCurvas = [
     ...curvas,
     ...curvasLocais.map(curva => ({ ...curva, local: true }))
@@ -385,34 +506,80 @@ export default function DarkFiberDetalhes() {
           <h1>{item.cliente}</h1>
           <p>{item.rota} · {item.origem || 'Origem'} → {item.destino || 'Destino'}</p>
         </div>
-        <span className="dark-status">{item.status}</span>
+        <div className="dark-header-actions">
+          <span className="dark-status">{item.status}</span>
+          {!editando && (
+            <button className="botao-primario" onClick={iniciarEdicao}>
+              <Pencil size={17} /> Editar
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="dark-detail-grid">
-        <section className="dark-panel">
-          <h2><Cable size={20} /> Informações</h2>
-          <dl>
-            <div><dt>Cliente</dt><dd>{item.cliente}</dd></div>
-            <div><dt>Fibras</dt><dd>{item.fibras || '—'}</dd></div>
-            <div><dt>Cabo</dt><dd>{item.cabo || '—'}</dd></div>
-            <div><dt>Observações</dt><dd>{item.observacao || '—'}</dd></div>
-          </dl>
-        </section>
+      {editando ? (
+        <form className="dark-panel dark-edit-form" onSubmit={salvarEdicao}>
+          <div className="dark-section-head">
+            <div>
+              <h2><Pencil size={20} /> Editar circuito</h2>
+              <p>Altere os dados e salve no mesmo cadastro.</p>
+            </div>
+            <div className="dark-edit-actions">
+              <button type="button" className="botao-cancelar" onClick={cancelarEdicao}>
+                <X size={17} /> Cancelar
+              </button>
+              <button type="submit" className="botao-primario" disabled={salvandoEdicao}>
+                <Save size={17} /> {salvandoEdicao ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
+          </div>
 
-        <section className="dark-panel">
-          <h2><MapPin size={20} /> Coordenadas</h2>
-          <dl>
-            <div>
-              <dt>Origem</dt>
-              <dd>{coordenadaValida(item.latOrigem) && coordenadaValida(item.lngOrigem) ? `${item.latOrigem}, ${item.lngOrigem}` : 'Não informada'}</dd>
-            </div>
-            <div>
-              <dt>Destino</dt>
-              <dd>{coordenadaValida(item.latDestino) && coordenadaValida(item.lngDestino) ? `${item.latDestino}, ${item.lngDestino}` : 'Não informada'}</dd>
-            </div>
-          </dl>
-        </section>
-      </div>
+          <div className="dark-edit-grid">
+            {[
+              ['cliente', 'Cliente'], ['rota', 'Rota'], ['fibras', 'Fibras'], ['cabo', 'Cabo'],
+              ['origem', 'Origem'], ['destino', 'Destino'], ['latOrigem', 'Latitude origem'],
+              ['lngOrigem', 'Longitude origem'], ['latDestino', 'Latitude destino'], ['lngDestino', 'Longitude destino'],
+              ['dioOrigem', 'DIO origem'], ['portaDioOrigem', 'Porta do DIO origem'],
+              ['dioDestino', 'DIO destino'], ['portaDioDestino', 'Porta do DIO destino']
+            ].map(([name, label]) => (
+              <label key={name}>{label}
+                <input name={name} value={formulario[name] || ''} onChange={alterarFormulario} />
+              </label>
+            ))}
+            <label>Status
+              <select name="status" value={formulario.status || 'Em uso'} onChange={alterarFormulario}>
+                <option>Em uso</option><option>Disponível</option><option>Manutenção</option><option>Inativo</option>
+              </select>
+            </label>
+            <label className="campo-largo">Observações
+              <textarea name="observacao" rows="4" value={formulario.observacao || ''} onChange={alterarFormulario} />
+            </label>
+          </div>
+        </form>
+      ) : (
+        <div className="dark-detail-grid">
+          <section className="dark-panel">
+            <h2><Cable size={20} /> Informações</h2>
+            <dl>
+              <div><dt>Cliente</dt><dd>{item.cliente}</dd></div>
+              <div><dt>Fibras</dt><dd>{item.fibras || '—'}</dd></div>
+              <div><dt>Cabo</dt><dd>{item.cabo || '—'}</dd></div>
+              <div><dt>DIO origem</dt><dd>{item.dioOrigem || '—'}</dd></div>
+              <div><dt>Porta DIO origem</dt><dd>{item.portaDioOrigem || '—'}</dd></div>
+              <div><dt>DIO destino</dt><dd>{item.dioDestino || '—'}</dd></div>
+              <div><dt>Porta DIO destino</dt><dd>{item.portaDioDestino || '—'}</dd></div>
+              <div><dt>Observações</dt><dd>{item.observacao || '—'}</dd></div>
+            </dl>
+          </section>
+
+          <section className="dark-panel">
+            <h2><MapPin size={20} /> Coordenadas</h2>
+            <dl>
+              <div><dt>Origem</dt><dd>{coordenadaValida(item.latOrigem) && coordenadaValida(item.lngOrigem) ? `${item.latOrigem}, ${item.lngOrigem}` : 'Não informada'}</dd></div>
+              <div><dt>Destino</dt><dd>{coordenadaValida(item.latDestino) && coordenadaValida(item.lngDestino) ? `${item.latDestino}, ${item.lngDestino}` : 'Não informada'}</dd></div>
+            </dl>
+          </section>
+        </div>
+      )}
 
       <section className="dark-panel">
         <div className="dark-section-head">
@@ -476,6 +643,35 @@ export default function DarkFiberDetalhes() {
           </button>
         </section>
       )}
+
+
+      <section className="dark-panel">
+        <div className="dark-section-head">
+          <div>
+            <h2><Camera size={20} /> Fotos do circuito</h2>
+            <p>As fotos ficam no Firebase Storage e aparecem em qualquer dispositivo.</p>
+          </div>
+          <button className="botao-primario" onClick={() => inputFoto.current?.click()} disabled={uploadingFoto}>
+            <Upload size={17} /> {uploadingFoto ? 'Enviando...' : 'Adicionar foto'}
+          </button>
+          <input ref={inputFoto} type="file" accept="image/*" hidden onChange={enviarFoto} />
+        </div>
+
+        {fotos.length === 0 ? (
+          <div className="dark-empty compact"><Camera size={38} /><h3>Nenhuma foto cadastrada</h3></div>
+        ) : (
+          <div className="dark-photo-grid">
+            {fotos.map(foto => (
+              <article key={foto.id}>
+                <a href={foto.url} target="_blank" rel="noopener noreferrer">
+                  <img src={foto.url} alt={foto.nome || 'Foto do circuito'} />
+                </a>
+                <div><span title={foto.nome}>{foto.nome}</span><button className="danger" onClick={() => excluirFoto(foto)}><Trash2 size={17} /></button></div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="dark-panel">
         <div className="dark-section-head">

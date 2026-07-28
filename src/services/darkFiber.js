@@ -51,6 +51,10 @@ export async function salvarDarkFiber(dados) {
       lngDestino: dados.lngDestino || "",
 
       cabo: dados.cabo || "",
+      dioOrigem: dados.dioOrigem || "",
+      portaDioOrigem: dados.portaDioOrigem || "",
+      dioDestino: dados.dioDestino || "",
+      portaDioDestino: dados.portaDioDestino || "",
 
       status: dados.status || "Em uso",
 
