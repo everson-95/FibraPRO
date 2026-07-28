@@ -1,16 +1,285 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { House, MapPin, Boxes, Cable, Plus, Search, Trash2, ArrowRight } from 'lucide-react';
+import {
+  ArrowRight,
+  FileArchive,
+  FolderOpen,
+  MapPin,
+  Plus,
+  Search,
+  Trash2,
+  Upload
+} from 'lucide-react';
 import useFirestoreCollection from '../hooks/useFirestoreCollection';
 import { createRecord, deleteRecord } from '../services/firestoreCrud';
+import { criarCaminhoArquivo, uploadFile } from '../services/storage';
+import { salvarAnexo } from '../services/anexos';
 import './FTTH.css';
-const vazio={nome:'',cidade:'',descricao:'Rede FTTH urbana',ctos:'0',cabos:'0',olts:'',status:'Operacional',latitude:'',longitude:'',observacao:''};
-export default function FTTH(){
- const {items:redes,loading,error}=useFirestoreCollection('ftthRedes',{orderBy:'nome'});const[modal,setModal]=useState(false);const[form,setForm]=useState(vazio);const[q,setQ]=useState('');const[saving,setSaving]=useState(false);
- const filtradas=useMemo(()=>redes.filter(r=>JSON.stringify(r).toLowerCase().includes(q.toLowerCase())),[redes,q]);
- async function salvar(e){e.preventDefault();if(!form.nome.trim())return alert('Informe o nome da rede FTTH.');setSaving(true);try{await createRecord('ftthRedes',form);setForm(vazio);setModal(false)}catch(err){console.error(err);alert('Erro ao salvar no Firebase.')}finally{setSaving(false)}}
- async function excluir(id){if(!confirm('Excluir esta rede FTTH?'))return;try{await deleteRecord('ftthRedes',id)}catch(err){console.error(err);alert('Não foi possível excluir.')}}
- return <div className="ftth-page"><div className="ftth-cabecalho"><div><span>REDE DE ACESSO</span><h1>FTTH</h1><p>Redes urbanas, CTOs, cabos, OLTs, mapas e arquivos KMZ.</p></div><button onClick={()=>setModal(true)}><Plus size={17}/> Nova rede FTTH</button></div><div className="ftth-toolbar"><Search size={18}/><input placeholder="Pesquisar rede, cidade ou status..." value={q} onChange={e=>setQ(e.target.value)}/><span>{filtradas.length} rede(s)</span></div>{loading?<div className="ftth-empty">Carregando da nuvem...</div>:error?<div className="ftth-empty">Erro ao carregar o Firebase.</div>:<div className="ftth-grid">{filtradas.map(rede=><div className="ftth-card" key={rede.id}><div className="ftth-card-top"><House size={27}/><span>{rede.status}</span></div><h2>{rede.nome}</h2><p>{rede.descricao||'Rede FTTH'}</p><div className="ftth-dados"><span><MapPin size={16}/>{rede.cidade||'Cidade não informada'}</span><span><Boxes size={16}/>CTOs: {rede.ctos||0}</span><span><Cable size={16}/>Cabos: {rede.cabos||0}</span></div><div className="ftth-actions"><Link className="abrir-ftth" to={`/ftth/${rede.id}`}><ArrowRight size={16}/> Abrir rede</Link><button className="excluir-ftth" onClick={()=>excluir(rede.id)}><Trash2 size={16}/></button></div></div>)}</div>}
- {modal&&<div className="modal-backdrop" onMouseDown={()=>setModal(false)}><div className="crud-modal" onMouseDown={e=>e.stopPropagation()}><div className="crud-modal-head"><h2>Nova rede FTTH</h2><button onClick={()=>setModal(false)}>×</button></div><form className="crud-form" onSubmit={salvar}>{Object.entries({nome:'Nome da rede *',cidade:'Cidade',descricao:'Descrição',ctos:'Quantidade de CTOs',cabos:'Quantidade de cabos',olts:'OLTs',latitude:'Latitude central',longitude:'Longitude central'}).map(([n,l])=><label key={n} className={n==='descricao'?'full':''}><span>{l}</span><input value={form[n]} onChange={e=>setForm({...form,[n]:e.target.value})}/></label>)}<label><span>Status</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option>Operacional</option><option>Implantação</option><option>Manutenção</option><option>Desativada</option></select></label><label className="full"><span>Observações</span><textarea value={form.observacao} onChange={e=>setForm({...form,observacao:e.target.value})}/></label><div className="crud-buttons full"><button type="button" className="botao-secundario" onClick={()=>setModal(false)}>Cancelar</button><button className="botao-primario" disabled={saving}>{saving?'Salvando...':'Salvar rede'}</button></div></form></div></div>}
- </div>
+
+const formularioInicial = {
+  nome: '',
+  cidade: '',
+  observacao: '',
+  status: 'Operacional'
+};
+
+export default function FTTH() {
+  const {
+    items: redes,
+    loading,
+    error
+  } = useFirestoreCollection('ftthRedes', { orderBy: 'nome' });
+
+  const [modal, setModal] = useState(false);
+  const [formulario, setFormulario] = useState(formularioInicial);
+  const [arquivo, setArquivo] = useState(null);
+  const [pesquisa, setPesquisa] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const redesFiltradas = useMemo(() => {
+    const termo = pesquisa.trim().toLowerCase();
+    if (!termo) return redes;
+
+    return redes.filter(rede =>
+      [rede.nome, rede.cidade, rede.observacao, rede.status]
+        .filter(Boolean)
+        .some(valor => String(valor).toLowerCase().includes(termo))
+    );
+  }, [redes, pesquisa]);
+
+  function fecharModal() {
+    if (salvando) return;
+    setModal(false);
+    setFormulario(formularioInicial);
+    setArquivo(null);
+  }
+
+  async function salvarRede(evento) {
+    evento.preventDefault();
+
+    if (!formulario.nome.trim()) {
+      alert('Informe o nome da rede FTTH.');
+      return;
+    }
+
+    if (arquivo && !/\.(kmz|kml)$/i.test(arquivo.name)) {
+      alert('Selecione um arquivo KMZ ou KML.');
+      return;
+    }
+
+    setSalvando(true);
+
+    try {
+      const referencia = await createRecord('ftthRedes', {
+        nome: formulario.nome.trim(),
+        cidade: formulario.cidade.trim(),
+        observacao: formulario.observacao.trim(),
+        status: formulario.status
+      });
+
+      if (arquivo) {
+        const caminho = criarCaminhoArquivo(
+          'ftth',
+          referencia.id,
+          'kmz',
+          arquivo.name
+        );
+
+        const upload = await uploadFile(caminho, arquivo);
+
+        await salvarAnexo({
+          parentType: 'ftthRedes',
+          parentId: referencia.id,
+          categoria: 'KMZ',
+          nome: arquivo.name,
+          tipo: arquivo.type || '',
+          tamanho: arquivo.size,
+          url: upload.url,
+          storagePath: upload.path
+        });
+      }
+
+      setModal(false);
+      setFormulario(formularioInicial);
+      setArquivo(null);
+    } catch (erro) {
+      console.error('Erro ao cadastrar rede FTTH:', erro);
+      alert('Não foi possível cadastrar a rede FTTH.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluirRede(id) {
+    if (!confirm('Excluir esta pasta de rede FTTH? Os arquivos devem ser removidos antes na tela da rede.')) {
+      return;
+    }
+
+    try {
+      await deleteRecord('ftthRedes', id);
+    } catch (erro) {
+      console.error('Erro ao excluir rede FTTH:', erro);
+      alert('Não foi possível excluir a rede FTTH.');
+    }
+  }
+
+  return (
+    <div className="ftth-page">
+      <header className="ftth-cabecalho">
+        <div>
+          <span>DOCUMENTAÇÃO DE REDE</span>
+          <h1>Redes FTTH</h1>
+          <p>Pastas das redes FTTH com arquivos KMZ/KML disponíveis para a equipe técnica.</p>
+        </div>
+
+        <button type="button" onClick={() => setModal(true)}>
+          <Plus size={17} /> Nova rede FTTH
+        </button>
+      </header>
+
+      <div className="ftth-toolbar">
+        <Search size={18} />
+        <input
+          type="search"
+          placeholder="Pesquisar rede ou cidade..."
+          value={pesquisa}
+          onChange={evento => setPesquisa(evento.target.value)}
+        />
+        <span>{redesFiltradas.length} pasta(s)</span>
+      </div>
+
+      {loading ? (
+        <div className="ftth-empty">Carregando redes da nuvem...</div>
+      ) : error ? (
+        <div className="ftth-empty">Não foi possível carregar as redes FTTH.</div>
+      ) : redesFiltradas.length === 0 ? (
+        <div className="ftth-empty">
+          <FolderOpen size={42} />
+          <h3>Nenhuma rede FTTH cadastrada</h3>
+          <p>Crie uma pasta para disponibilizar o KMZ aos técnicos.</p>
+        </div>
+      ) : (
+        <div className="ftth-grid">
+          {redesFiltradas.map(rede => (
+            <article className="ftth-card ftth-folder-card" key={rede.id}>
+              <div className="ftth-card-top">
+                <div className="ftth-folder-icon">
+                  <FolderOpen size={29} />
+                </div>
+                <span>{rede.status || 'Operacional'}</span>
+              </div>
+
+              <h2>{rede.nome}</h2>
+
+              <div className="ftth-dados">
+                <span>
+                  <MapPin size={16} />
+                  {rede.cidade || 'Cidade não informada'}
+                </span>
+                <span>
+                  <FileArchive size={16} />
+                  Pasta de arquivos KMZ/KML
+                </span>
+              </div>
+
+              {rede.observacao && <p className="ftth-card-observacao">{rede.observacao}</p>}
+
+              <div className="ftth-actions">
+                <Link className="abrir-ftth" to={`/ftth/${rede.id}`}>
+                  <ArrowRight size={16} /> Abrir pasta
+                </Link>
+                <button
+                  type="button"
+                  className="excluir-ftth"
+                  title="Excluir pasta"
+                  onClick={() => excluirRede(rede.id)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <div className="modal-backdrop" onMouseDown={fecharModal}>
+          <div className="crud-modal" onMouseDown={evento => evento.stopPropagation()}>
+            <div className="crud-modal-head">
+              <div>
+                <h2>Nova rede FTTH</h2>
+                <p>Cadastre a pasta e, se desejar, já envie o KMZ.</p>
+              </div>
+              <button type="button" onClick={fecharModal}>×</button>
+            </div>
+
+            <form className="crud-form" onSubmit={salvarRede}>
+              <label>
+                <span>Nome da rede *</span>
+                <input
+                  value={formulario.nome}
+                  onChange={evento => setFormulario({ ...formulario, nome: evento.target.value })}
+                  placeholder="Ex.: FTTH Malacacheta"
+                />
+              </label>
+
+              <label>
+                <span>Cidade</span>
+                <input
+                  value={formulario.cidade}
+                  onChange={evento => setFormulario({ ...formulario, cidade: evento.target.value })}
+                  placeholder="Ex.: Malacacheta"
+                />
+              </label>
+
+              <label>
+                <span>Status</span>
+                <select
+                  value={formulario.status}
+                  onChange={evento => setFormulario({ ...formulario, status: evento.target.value })}
+                >
+                  <option>Operacional</option>
+                  <option>Implantação</option>
+                  <option>Manutenção</option>
+                  <option>Desativada</option>
+                </select>
+              </label>
+
+              <label className="full">
+                <span>Observação</span>
+                <textarea
+                  rows="3"
+                  value={formulario.observacao}
+                  onChange={evento => setFormulario({ ...formulario, observacao: evento.target.value })}
+                  placeholder="Informações importantes sobre esta rede."
+                />
+              </label>
+
+              <label className="full ftth-upload-field">
+                <span>Arquivo KMZ/KML inicial (opcional)</span>
+                <input
+                  type="file"
+                  accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml"
+                  onChange={evento => setArquivo(evento.target.files?.[0] || null)}
+                />
+                <small>
+                  <Upload size={15} />
+                  {arquivo ? arquivo.name : 'Você também poderá enviar o arquivo depois.'}
+                </small>
+              </label>
+
+              <div className="crud-buttons full">
+                <button type="button" className="botao-secundario" onClick={fecharModal}>
+                  Cancelar
+                </button>
+                <button type="submit" className="botao-primario" disabled={salvando}>
+                  {salvando ? 'Salvando...' : 'Criar pasta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

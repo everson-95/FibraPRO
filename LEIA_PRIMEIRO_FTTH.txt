@@ -1,0 +1,28 @@
+FIBRAPRO - FTTH SIMPLIFICADO
+
+O módulo FTTH foi alterado para funcionar como pastas de rede:
+- Cadastro de rede FTTH
+- Nome, cidade, status e observação
+- Upload opcional de KMZ/KML no cadastro
+- Pasta individual para cada rede
+- Upload de novos KMZ/KML dentro da pasta
+- Download pelo notebook ou celular
+- Exclusão de arquivo no Firebase Storage
+
+TESTE
+1. npm install
+2. npm run dev
+3. Abra FTTH
+4. Cadastre uma rede com um KMZ
+5. Abra a pasta da rede
+6. Teste o botão Baixar em guia normal, anônima e no celular
+
+PUBLICAÇÃO
+Depois de copiar os arquivos para a pasta original que contém .git:
+
+git add src/pages/FTTH.jsx src/pages/FTTHDetalhes.jsx src/pages/FTTH.css
+git commit -m "Simplifica FTTH com pastas e download de KMZ"
+git push
+
+OBSERVAÇÃO
+O build não foi executado no ambiente Linux porque o node_modules do ZIP contém dependências nativas do Windows. A sintaxe dos arquivos JSX foi validada. Execute npm run build no Windows antes do push.

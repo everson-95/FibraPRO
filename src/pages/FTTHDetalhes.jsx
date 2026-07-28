@@ -1,52 +1,211 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Boxes, Download, FileArchive, Layers3, MapPin, Navigation, Trash2, Upload } from 'lucide-react';
-import MapaRota from '../components/mapa/MapaRota';
+import {
+  ArrowLeft,
+  Download,
+  FileArchive,
+  FolderOpen,
+  MapPin,
+  Trash2,
+  Upload
+} from 'lucide-react';
 import useFirestoreDocument from '../hooks/useFirestoreDocument';
-import { observeCloudAttachments, saveCloudAttachment, deleteCloudAttachment, downloadDataUrl } from '../services/cloudFiles';
-import { parseMapFile } from '../utils/kmz';
+import { criarCaminhoArquivo, deleteFile, uploadFile } from '../services/storage';
+import { excluirAnexo, observarAnexos, salvarAnexo } from '../services/anexos';
 import './FTTH.css';
 
-function countByKind(markers = [], kind) { return markers.filter(item => item.kind === kind).length; }
-function safeCoordinate(value) { const number = Number(String(value ?? '').replace(',', '.')); return Number.isFinite(number) ? number : null; }
+function formatarTamanho(bytes = 0) {
+  if (!Number.isFinite(Number(bytes)) || Number(bytes) <= 0) return 'Tamanho não informado';
+  const valor = Number(bytes);
+  if (valor < 1024 * 1024) return `${(valor / 1024).toFixed(1)} KB`;
+  return `${(valor / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 export default function FTTHDetalhes() {
   const { id } = useParams();
-  const { item: rede, loading: redeLoading } = useFirestoreDocument('ftthRedes', id);
+  const { item: rede, loading } = useFirestoreDocument('ftthRedes', id);
   const [arquivos, setArquivos] = useState([]);
-  const [loadingMap, setLoadingMap] = useState(false);
-  const [mapError, setMapError] = useState('');
-  const inputRef = useRef();
-  useEffect(() => observeCloudAttachments('ftthRedes', id, 'kmz', setArquivos, console.error), [id]);
+  const [enviando, setEnviando] = useState(false);
+  const inputArquivo = useRef(null);
 
-  if (redeLoading) return <div className="ftth-empty">Carregando rede da nuvem...</div>;
-  if (!rede) return <div className="ftth-empty"><h2>Rede FTTH não encontrada</h2><Link to="/ftth">Voltar</Link></div>;
+  useEffect(() => {
+    if (!id) return undefined;
 
-  async function selecionar(e) {
-    const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
-    setLoadingMap(true); setMapError('');
+    return observarAnexos(
+      'ftthRedes',
+      id,
+      'KMZ',
+      setArquivos,
+      erro => console.error('Erro ao carregar arquivos FTTH:', erro)
+    );
+  }, [id]);
+
+  async function enviarArquivo(evento) {
+    const arquivo = evento.target.files?.[0];
+    evento.target.value = '';
+    if (!arquivo) return;
+
+    if (!/\.(kmz|kml)$/i.test(arquivo.name)) {
+      alert('Selecione um arquivo KMZ ou KML.');
+      return;
+    }
+
+    setEnviando(true);
+
     try {
-      const parsed = await parseMapFile(file);
-      await saveCloudAttachment({ parentType: 'ftthRedes', parentId: id, category: 'kmz', file, extra: { tracks: parsed.tracks, markers: parsed.markers, trechos: parsed.tracks.length, pontos: parsed.markers.length } });
-    } catch (error) { console.error(error); setMapError(error.message || 'Não foi possível ler o arquivo.'); }
-    finally { setLoadingMap(false); }
+      const caminho = criarCaminhoArquivo('ftth', id, 'kmz', arquivo.name);
+      const upload = await uploadFile(caminho, arquivo);
+
+      await salvarAnexo({
+        parentType: 'ftthRedes',
+        parentId: id,
+        categoria: 'KMZ',
+        nome: arquivo.name,
+        tipo: arquivo.type || '',
+        tamanho: arquivo.size,
+        url: upload.url,
+        storagePath: upload.path
+      });
+    } catch (erro) {
+      console.error('Erro ao enviar KMZ/KML:', erro);
+      alert(erro.message || 'Não foi possível enviar o arquivo.');
+    } finally {
+      setEnviando(false);
+    }
   }
 
-  async function excluir(arq) { if (!confirm('Excluir este arquivo e remover seus elementos do mapa?')) return; await deleteCloudAttachment(arq.id); }
+  function baixarArquivo(arquivo) {
+    if (!arquivo.url) {
+      alert('O endereço deste arquivo não está disponível.');
+      return;
+    }
 
-  const fallbackPoint = useMemo(() => {
-    const lat = safeCoordinate(rede.latitude), lng = safeCoordinate(rede.longitude);
-    return lat !== null && lng !== null ? [{ id: `rede-${rede.id}`, name: rede.nome, description: rede.cidade, kind: 'pop', position: [lat, lng] }] : [];
-  }, [rede]);
-  const markers = arquivos.flatMap(a => a.markers || []), tracks = arquivos.flatMap(a => a.tracks || []);
-  const mapPoints = markers.length ? markers : fallbackPoint;
-  const ctoCount = countByKind(markers, 'cto'), splitterCount = countByKind(markers, 'splitter'), popCount = countByKind(markers, 'pop'), postCount = countByKind(markers, 'poste');
+    const link = document.createElement('a');
+    link.href = arquivo.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = arquivo.nome || 'rede-ftth.kmz';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
 
-  return <div className="ftth-page">
-    <Link className="voltar-link" to="/ftth"><ArrowLeft size={17}/> Voltar para FTTH</Link>
-    <div className="ftth-cabecalho"><div><span>REDE FTTH</span><h1>{rede.nome}</h1><p>{rede.descricao} · {rede.cidade}</p></div><span className="ftth-status">{rede.status}</span></div>
-    <div className="ftth-detail-grid"><section className="ftth-panel"><h2><Boxes size={20}/> Estrutura identificada</h2><div className="ftth-metricas ftth-metricas-5"><div><strong>{ctoCount || rede.ctos || 0}</strong><span>CTOs</span></div><div><strong>{splitterCount}</strong><span>Splitters</span></div><div><strong>{popCount || rede.olts || '—'}</strong><span>POPs / OLTs</span></div><div><strong>{tracks.length || rede.cabos || 0}</strong><span>Trechos</span></div><div><strong>{postCount}</strong><span>Postes</span></div></div></section><section className="ftth-panel"><h2><MapPin size={20}/> Localização</h2><p>{fallbackPoint.length ? `${rede.latitude}, ${rede.longitude}` : 'Coordenadas centrais não informadas.'}</p><p>{rede.observacao || 'Use Minha localização para visualizar sua posição em campo.'}</p></section></div>
-    <section className="ftth-panel ftth-map-panel"><div className="ftth-section-head"><div><h2><Layers3 size={20}/> Mapa inteligente da rede</h2><p>CTOs, splitters, POPs, postes e cabos ficam sincronizados na nuvem.</p></div><div className="ftth-map-actions">{loadingMap&&<span className="ftth-loading">Lendo KMZ...</span>}<button className="botao-primario" onClick={()=>inputRef.current?.click()} disabled={loadingMap}><Upload size={17}/> {loadingMap?'Processando...':'Adicionar KMZ/KML'}</button><input ref={inputRef} hidden type="file" accept=".kmz,.kml" onChange={selecionar}/></div></div>{mapError&&<div className="ftth-map-error">{mapError}</div>}<MapaRota points={mapPoints} tracks={tracks} center={fallbackPoint[0]?.position} enableLocation showLayerControl height={560}/><div className="ftth-map-legend"><span><i className="legend-cto">C</i> CTO</span><span><i className="legend-splitter">S</i> Splitter</span><span><i className="legend-pop">P</i> POP/OLT</span><span><b className="legend-primary"/> Cabo primário</span><span><b className="legend-distribution"/> Distribuição</span><span><Navigation size={15}/> Clique em um ponto para navegar</span></div></section>
-    <section className="ftth-panel"><div className="ftth-section-head"><div><h2><FileArchive size={20}/> Arquivos KMZ / KML</h2><p>O desenho do mapa fica disponível em qualquer dispositivo.</p></div></div>{arquivos.length===0?<div className="ftth-empty"><FileArchive size={38}/><h3>Nenhum KMZ adicionado</h3></div>:<div className="ftth-files">{arquivos.map(arq=><article key={arq.id}><div><FileArchive/><span><strong>{arq.nome}</strong><small>{(arq.tamanho/1024).toFixed(1)} KB · {arq.trechos||0} trechos · {arq.pontos||0} pontos</small></span></div><div><button title="Baixar KMZ" onClick={()=>downloadDataUrl(arq.dataUrl,arq.nome)}><Download size={17}/></button><button title="Excluir KMZ" className="danger" onClick={()=>excluir(arq)}><Trash2 size={17}/></button></div></article>)}</div>}</section>
-  </div>;
+  async function removerArquivo(arquivo) {
+    if (!confirm(`Excluir o arquivo ${arquivo.nome}?`)) return;
+
+    try {
+      await deleteFile(arquivo.storagePath);
+      await excluirAnexo(arquivo.id);
+    } catch (erro) {
+      console.error('Erro ao excluir arquivo FTTH:', erro);
+      alert('Não foi possível excluir o arquivo.');
+    }
+  }
+
+  if (loading) {
+    return <div className="ftth-empty">Carregando pasta da rede...</div>;
+  }
+
+  if (!rede) {
+    return (
+      <div className="ftth-empty">
+        <h2>Rede FTTH não encontrada</h2>
+        <Link to="/ftth">Voltar para FTTH</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ftth-page">
+      <Link className="voltar-link" to="/ftth">
+        <ArrowLeft size={17} /> Voltar para FTTH
+      </Link>
+
+      <header className="ftth-cabecalho ftth-folder-header">
+        <div>
+          <span>PASTA DA REDE FTTH</span>
+          <h1><FolderOpen size={34} /> {rede.nome}</h1>
+          <p>
+            <MapPin size={15} /> {rede.cidade || 'Cidade não informada'}
+          </p>
+        </div>
+        <span className="ftth-status">{rede.status || 'Operacional'}</span>
+      </header>
+
+      {rede.observacao && (
+        <section className="ftth-panel ftth-note-panel">
+          <h2>Observações</h2>
+          <p>{rede.observacao}</p>
+        </section>
+      )}
+
+      <section className="ftth-panel">
+        <div className="ftth-section-head">
+          <div>
+            <h2><FileArchive size={20} /> Arquivos da rede</h2>
+            <p>Os técnicos podem baixar os arquivos KMZ/KML pelo celular.</p>
+          </div>
+
+          <button
+            type="button"
+            className="botao-primario"
+            disabled={enviando}
+            onClick={() => inputArquivo.current?.click()}
+          >
+            <Upload size={17} /> {enviando ? 'Enviando...' : 'Adicionar KMZ/KML'}
+          </button>
+
+          <input
+            ref={inputArquivo}
+            type="file"
+            hidden
+            accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml"
+            onChange={enviarArquivo}
+          />
+        </div>
+
+        {arquivos.length === 0 ? (
+          <div className="ftth-empty compact">
+            <FileArchive size={40} />
+            <h3>Nenhum arquivo nesta pasta</h3>
+            <p>Adicione o KMZ ou KML para disponibilizar à equipe.</p>
+          </div>
+        ) : (
+          <div className="ftth-files ftth-download-list">
+            {arquivos.map(arquivo => (
+              <article key={arquivo.id}>
+                <div>
+                  <div className="ftth-file-icon">
+                    <FileArchive size={22} />
+                  </div>
+                  <span>
+                    <strong>{arquivo.nome}</strong>
+                    <small>{formatarTamanho(arquivo.tamanho)}</small>
+                  </span>
+                </div>
+
+                <div className="ftth-file-actions">
+                  <button
+                    type="button"
+                    className="ftth-download-button"
+                    onClick={() => baixarArquivo(arquivo)}
+                  >
+                    <Download size={17} /> Baixar
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    title="Excluir arquivo"
+                    onClick={() => removerArquivo(arquivo)}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
