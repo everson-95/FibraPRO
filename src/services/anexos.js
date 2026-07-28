@@ -7,6 +7,7 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
+  updateDoc,
   where
 } from "firebase/firestore";
 
@@ -47,4 +48,8 @@ export function observarAnexos(parentType, parentId, categoria, aoAtualizar, aoE
 
 export async function excluirAnexo(id) {
   await deleteDoc(doc(db, "anexos", id));
+}
+
+export async function atualizarAnexo(id, dados) {
+  await updateDoc(doc(db, "anexos", id), dados);
 }

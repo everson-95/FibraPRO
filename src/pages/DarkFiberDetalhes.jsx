@@ -14,7 +14,11 @@ import {
   Pencil,
   Save,
   X,
-  Camera
+  Camera,
+  Folder,
+  FolderPlus,
+  ChevronLeft,
+  Image as ImageIcon
 } from 'lucide-react';
 import MapaRota from '../components/mapa/MapaRota';
 import OtdrModal from '../components/OtdrModal';
@@ -24,7 +28,7 @@ import { deleteFile as deleteLocalFile, getFile, openStoredFile } from '../utils
 import { parseMapFile } from '../utils/kmz';
 import './DarkFiber.css';
 import { criarCaminhoArquivo, deleteFile as deleteStorageFile, uploadFile } from '../services/storage';
-import { excluirAnexo, observarAnexos, salvarAnexo } from '../services/anexos';
+import { atualizarAnexo, excluirAnexo, observarAnexos, salvarAnexo } from '../services/anexos';
 
 function coordenadaValida(valor) {
   return valor !== '' && valor !== null && valor !== undefined && Number.isFinite(Number(valor));
@@ -45,6 +49,8 @@ export default function DarkFiberDetalhes() {
   const [modal, setModal] = useState(false);
   const [loadingKmz, setLoadingKmz] = useState(false);
   const [fotos, setFotos] = useState([]);
+  const [pastasFotos, setPastasFotos] = useState([]);
+  const [pastaFotoAtiva, setPastaFotoAtiva] = useState(null);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [editando, setEditando] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
@@ -119,10 +125,19 @@ export default function DarkFiberDetalhes() {
       erro => console.error('Erro ao carregar fotos:', erro)
     );
 
+    const cancelarPastasFotos = observarAnexos(
+      'darkFiber',
+      id,
+      'FOTO_PASTA',
+      setPastasFotos,
+      erro => console.error('Erro ao carregar pastas de fotos:', erro)
+    );
+
     return () => {
       cancelarCurvas();
       cancelarKmz();
       cancelarFotos();
+      cancelarPastasFotos();
     };
   }, [id]);
 
@@ -428,10 +443,68 @@ export default function DarkFiberDetalhes() {
     }
   }
 
+  async function criarPastaFotos() {
+    const nome = prompt('Nome da pasta de fotos (ex.: SITE - POP MALACACHETA):');
+    if (!nome?.trim()) return;
+
+    try {
+      await salvarAnexo({
+        parentType: 'darkFiber',
+        parentId: id,
+        categoria: 'FOTO_PASTA',
+        nome: nome.trim()
+      });
+    } catch (erro) {
+      console.error('Erro ao criar pasta de fotos:', erro);
+      alert('Não foi possível criar a pasta.');
+    }
+  }
+
+  async function renomearPastaFotos(pasta) {
+    const nome = prompt('Novo nome da pasta:', pasta.nome || '');
+    if (!nome?.trim() || nome.trim() === pasta.nome) return;
+
+    try {
+      await atualizarAnexo(pasta.id, { nome: nome.trim() });
+      if (pastaFotoAtiva?.id === pasta.id) {
+        setPastaFotoAtiva(anterior => ({ ...anterior, nome: nome.trim() }));
+      }
+    } catch (erro) {
+      console.error('Erro ao renomear pasta:', erro);
+      alert('Não foi possível renomear a pasta.');
+    }
+  }
+
+  async function excluirPastaFotos(pasta) {
+    const fotosDaPasta = fotos.filter(foto => foto.pastaId === pasta.id);
+    const mensagem = fotosDaPasta.length
+      ? `Excluir a pasta "${pasta.nome}" e ${fotosDaPasta.length} foto(s)?`
+      : `Excluir a pasta "${pasta.nome}"?`;
+
+    if (!confirm(mensagem)) return;
+
+    try {
+      for (const foto of fotosDaPasta) {
+        await deleteStorageFile(foto.storagePath);
+        await excluirAnexo(foto.id);
+      }
+      await excluirAnexo(pasta.id);
+      if (pastaFotoAtiva?.id === pasta.id) setPastaFotoAtiva(null);
+    } catch (erro) {
+      console.error('Erro ao excluir pasta de fotos:', erro);
+      alert('Não foi possível excluir a pasta.');
+    }
+  }
+
   async function enviarFoto(evento) {
     const arquivo = evento.target.files?.[0];
     evento.target.value = '';
     if (!arquivo) return;
+
+    if (!pastaFotoAtiva || pastaFotoAtiva.id === '__sem_pasta__') {
+      alert('Abra uma pasta de fotos antes de adicionar uma imagem.');
+      return;
+    }
 
     if (!arquivo.type.startsWith('image/')) {
       alert('Selecione uma imagem.');
@@ -440,12 +513,19 @@ export default function DarkFiberDetalhes() {
 
     setUploadingFoto(true);
     try {
-      const storagePath = criarCaminhoArquivo('darkFiber', id, 'fotos', arquivo.name);
+      const storagePath = criarCaminhoArquivo(
+        'darkFiber',
+        id,
+        `fotos/${pastaFotoAtiva.id}`,
+        arquivo.name
+      );
       const upload = await uploadFile(storagePath, arquivo);
       await salvarAnexo({
         parentType: 'darkFiber',
         parentId: id,
         categoria: 'FOTO',
+        pastaId: pastaFotoAtiva.id,
+        pastaNome: pastaFotoAtiva.nome,
         nome: arquivo.name,
         tipo: arquivo.type,
         tamanho: arquivo.size,
@@ -470,6 +550,12 @@ export default function DarkFiberDetalhes() {
       alert('Não foi possível excluir a foto.');
     }
   }
+
+  const fotosSemPasta = fotos.filter(foto => !foto.pastaId);
+  const fotosDaPastaAtiva = pastaFotoAtiva?.id === '__sem_pasta__'
+    ? fotosSemPasta
+    : fotos.filter(foto => foto.pastaId === pastaFotoAtiva?.id);
+
 
   const todasCurvas = [
     ...curvas,
@@ -649,27 +735,111 @@ export default function DarkFiberDetalhes() {
         <div className="dark-section-head">
           <div>
             <h2><Camera size={20} /> Fotos do circuito</h2>
-            <p>As fotos ficam no Firebase Storage e aparecem em qualquer dispositivo.</p>
+            <p>Organize as imagens por site, POP, CEO, torre ou outro local.</p>
           </div>
-          <button className="botao-primario" onClick={() => inputFoto.current?.click()} disabled={uploadingFoto}>
-            <Upload size={17} /> {uploadingFoto ? 'Enviando...' : 'Adicionar foto'}
-          </button>
+
+          {!pastaFotoAtiva ? (
+            <button className="botao-primario" onClick={criarPastaFotos}>
+              <FolderPlus size={17} /> Nova pasta
+            </button>
+          ) : (
+            <button
+              className="botao-primario"
+              onClick={() => inputFoto.current?.click()}
+              disabled={uploadingFoto || pastaFotoAtiva.id === '__sem_pasta__'}
+            >
+              <Upload size={17} /> {uploadingFoto ? 'Enviando...' : 'Adicionar foto'}
+            </button>
+          )}
+
           <input ref={inputFoto} type="file" accept="image/*" hidden onChange={enviarFoto} />
         </div>
 
-        {fotos.length === 0 ? (
-          <div className="dark-empty compact"><Camera size={38} /><h3>Nenhuma foto cadastrada</h3></div>
+        {!pastaFotoAtiva ? (
+          <>
+            {pastasFotos.length === 0 && fotosSemPasta.length === 0 ? (
+              <div className="dark-empty compact">
+                <Folder size={38} />
+                <h3>Nenhuma pasta de fotos</h3>
+                <p>Crie uma pasta para cada local do circuito.</p>
+              </div>
+            ) : (
+              <div className="dark-photo-folders">
+                {pastasFotos.map(pasta => {
+                  const quantidade = fotos.filter(foto => foto.pastaId === pasta.id).length;
+                  return (
+                    <article key={pasta.id}>
+                      <button className="dark-photo-folder-open" onClick={() => setPastaFotoAtiva(pasta)}>
+                        <Folder size={30} />
+                        <span>
+                          <strong>{pasta.nome}</strong>
+                          <small>{quantidade} foto(s)</small>
+                        </span>
+                      </button>
+                      <div className="dark-photo-folder-actions">
+                        <button onClick={() => renomearPastaFotos(pasta)} title="Renomear pasta">
+                          <Pencil size={16} />
+                        </button>
+                        <button className="danger" onClick={() => excluirPastaFotos(pasta)} title="Excluir pasta">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+
+                {fotosSemPasta.length > 0 && (
+                  <article>
+                    <button
+                      className="dark-photo-folder-open"
+                      onClick={() => setPastaFotoAtiva({ id: '__sem_pasta__', nome: 'Fotos antigas sem pasta' })}
+                    >
+                      <Folder size={30} />
+                      <span>
+                        <strong>Fotos antigas sem pasta</strong>
+                        <small>{fotosSemPasta.length} foto(s)</small>
+                      </span>
+                    </button>
+                  </article>
+                )}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="dark-photo-grid">
-            {fotos.map(foto => (
-              <article key={foto.id}>
-                <a href={foto.url} target="_blank" rel="noopener noreferrer">
-                  <img src={foto.url} alt={foto.nome || 'Foto do circuito'} />
-                </a>
-                <div><span title={foto.nome}>{foto.nome}</span><button className="danger" onClick={() => excluirFoto(foto)}><Trash2 size={17} /></button></div>
-              </article>
-            ))}
-          </div>
+          <>
+            <div className="dark-photo-folder-toolbar">
+              <button className="botao-cancelar" onClick={() => setPastaFotoAtiva(null)}>
+                <ChevronLeft size={17} /> Voltar às pastas
+              </button>
+              <div>
+                <Folder size={20} />
+                <strong>{pastaFotoAtiva.nome}</strong>
+              </div>
+            </div>
+
+            {fotosDaPastaAtiva.length === 0 ? (
+              <div className="dark-empty compact">
+                <ImageIcon size={38} />
+                <h3>Nenhuma foto nesta pasta</h3>
+              </div>
+            ) : (
+              <div className="dark-photo-grid">
+                {fotosDaPastaAtiva.map(foto => (
+                  <article key={foto.id}>
+                    <a href={foto.url} target="_blank" rel="noopener noreferrer">
+                      <img src={foto.url} alt={foto.nome || 'Foto do circuito'} />
+                    </a>
+                    <div>
+                      <span title={foto.nome}>{foto.nome}</span>
+                      <button className="danger" onClick={() => excluirFoto(foto)} title="Excluir foto">
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </section>
 
