@@ -1,0 +1,17 @@
+FIBRAPRO - MODO ADMINISTRADOR
+
+1. Abra o sistema e clique em "Administração" na barra lateral.
+2. Entre com o e-mail e a senha criados no Firebase Authentication.
+3. Após confirmar que o login funciona, publique o conteúdo de firestore.rules no Firestore.
+4. Publique o conteúdo de storage.rules no Firebase Storage.
+
+UID autorizado:
+uGqrREimmTew1vmPhWQw99Y6viB3
+
+Alterações desta versão:
+- Login do administrador pelo Firebase Authentication.
+- Botões administrativos ocultos para usuários não autenticados.
+- Edição e criação de rotas Backbone sincronizadas pelo Firestore.
+- Edição, criação e exclusão de Clientes Dedicados apenas para o administrador.
+- Tela de detalhes de Clientes Dedicados mantida e controles de KMZ protegidos.
+- Regras permanentes do Firestore e Storage incluídas na raiz do projeto.

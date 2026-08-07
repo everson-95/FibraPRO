@@ -10,6 +10,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  setDoc,
   where
 } from 'firebase/firestore';
 
@@ -48,4 +49,8 @@ export async function updateRecord(collectionName, id, data) {
 
 export async function deleteRecord(collectionName, id) {
   return deleteDoc(doc(db, collectionName, id));
+}
+
+export async function setRecord(collectionName, id, data) {
+  return setDoc(doc(db, collectionName, id), { ...data, atualizadoEm: serverTimestamp() }, { merge: true });
 }

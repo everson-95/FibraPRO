@@ -29,6 +29,7 @@ import { parseMapFile } from '../utils/kmz';
 import './DarkFiber.css';
 import { criarCaminhoArquivo, deleteFile as deleteStorageFile, uploadFile } from '../services/storage';
 import { atualizarAnexo, excluirAnexo, observarAnexos, salvarAnexo } from '../services/anexos';
+import { useAuth } from '../context/AuthContext';
 
 function coordenadaValida(valor) {
   return valor !== '' && valor !== null && valor !== undefined && Number.isFinite(Number(valor));
@@ -36,6 +37,7 @@ function coordenadaValida(valor) {
 
 export default function DarkFiberDetalhes() {
   const { id } = useParams();
+  const { isAdmin } = useAuth();
   const metaKey = `fibrapro-darkfiber-otdr-${id}`;
   const kmzKey = `fibrapro-darkfiber-kmz-${id}`;
 
@@ -182,6 +184,7 @@ export default function DarkFiberDetalhes() {
   const points = kmzPoints.length ? kmzPoints : coordinatePoints;
 
   async function salvarCurva(dados) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     try {
       const storagePath = criarCaminhoArquivo(
         'darkFiber',
@@ -219,6 +222,7 @@ export default function DarkFiberDetalhes() {
   }
 
   async function excluirCurva(curva) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     if (!confirm('Excluir esta curva?')) return;
 
     try {
@@ -238,6 +242,29 @@ export default function DarkFiberDetalhes() {
     }
   }
 
+  async function baixarUrl(url, nomeArquivo) {
+  try {
+    if (!url) {
+      alert("Arquivo não encontrado.");
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivo || "arquivo";
+    link.target = "_blank";
+    link.rel = "noopener";
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+  } catch (erro) {
+    console.error(erro);
+    alert("Não foi possível baixar o arquivo.");
+  }
+}
+
   async function abrirCurva(curva, baixar = false) {
     if (curva.local) {
       await openStoredFile(curva.id, baixar ? curva.arquivoNome : undefined);
@@ -245,12 +272,7 @@ export default function DarkFiberDetalhes() {
     }
 
     if (baixar) {
-      const link = document.createElement('a');
-      link.href = curva.url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.download = curva.nome || 'curva-otdr';
-      link.click();
+      await baixarUrl(curva.url, curva.nome || curva.arquivoNome || 'curva-otdr');
       return;
     }
 
@@ -292,6 +314,7 @@ export default function DarkFiberDetalhes() {
   }
 
   async function excluirKmz(arquivo) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     if (!confirm('Excluir este KMZ/KML e removê-lo do mapa?')) return;
 
     try {
@@ -311,16 +334,17 @@ export default function DarkFiberDetalhes() {
     }
   }
 
-  async function abrirKmz(arquivo) {
+  async function baixarKmz(arquivo) {
     if (arquivo.local) {
       await openStoredFile(arquivo.id, arquivo.nome);
       return;
     }
 
-    window.open(arquivo.url, '_blank', 'noopener,noreferrer');
+    await baixarUrl(arquivo.url, arquivo.nome || 'mapa.kmz');
   }
 
   async function migrarArquivosLocais() {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     if (migrando) return;
     setMigrando(true);
 
@@ -407,6 +431,7 @@ export default function DarkFiberDetalhes() {
   }
 
   async function salvarEdicao(evento) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     evento.preventDefault();
     setSalvandoEdicao(true);
 
@@ -476,6 +501,7 @@ export default function DarkFiberDetalhes() {
   }
 
   async function excluirPastaFotos(pasta) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     const fotosDaPasta = fotos.filter(foto => foto.pastaId === pasta.id);
     const mensagem = fotosDaPasta.length
       ? `Excluir a pasta "${pasta.nome}" e ${fotosDaPasta.length} foto(s)?`
@@ -497,6 +523,7 @@ export default function DarkFiberDetalhes() {
   }
 
   async function enviarFoto(evento) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     const arquivo = evento.target.files?.[0];
     evento.target.value = '';
     if (!arquivo) return;
@@ -541,6 +568,7 @@ export default function DarkFiberDetalhes() {
   }
 
   async function excluirFoto(foto) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     if (!confirm('Excluir esta foto?')) return;
     try {
       await deleteStorageFile(foto.storagePath);
@@ -594,7 +622,7 @@ export default function DarkFiberDetalhes() {
         </div>
         <div className="dark-header-actions">
           <span className="dark-status">{item.status}</span>
-          {!editando && (
+          {isAdmin && !editando && (
             <button className="botao-primario" onClick={iniciarEdicao}>
               <Pencil size={17} /> Editar
             </button>
@@ -673,13 +701,15 @@ export default function DarkFiberDetalhes() {
             <h2><MapPin size={20} /> Mapa do circuito</h2>
             <p>O KMZ/KML carregado é desenhado diretamente neste mapa.</p>
           </div>
-          <button
-            className="botao-primario"
-            onClick={() => inputKmz.current?.click()}
-            disabled={loadingKmz}
-          >
-            <Upload size={17} /> {loadingKmz ? 'Processando...' : 'Adicionar KMZ/KML'}
-          </button>
+          {isAdmin && (
+            <button
+              className="botao-primario"
+              onClick={() => inputKmz.current?.click()}
+              disabled={loadingKmz}
+            >
+              <Upload size={17} /> {loadingKmz ? 'Processando...' : 'Adicionar KMZ/KML'}
+            </button>
+          )}
           <input
             ref={inputKmz}
             type="file"
@@ -703,12 +733,14 @@ export default function DarkFiberDetalhes() {
                   </span>
                 </div>
                 <div>
-                  <button onClick={() => abrirKmz(arquivo)} title="Abrir KMZ/KML">
+                  <button onClick={() => baixarKmz(arquivo)} title="Baixar KMZ/KML">
                     <Download size={17} />
                   </button>
-                  <button className="danger" onClick={() => excluirKmz(arquivo)} title="Excluir">
-                    <Trash2 size={17} />
-                  </button>
+                  {isAdmin && (
+                    <button className="danger" onClick={() => excluirKmz(arquivo)} title="Excluir">
+                      <Trash2 size={17} />
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -724,9 +756,11 @@ export default function DarkFiberDetalhes() {
               Migre as curvas e os mapas antigos para que também apareçam no celular e em outros computadores.
             </p>
           </div>
-          <button className="botao-primario" onClick={migrarArquivosLocais} disabled={migrando}>
-            <Upload size={17} /> {migrando ? 'Migrando...' : 'Migrar para a nuvem'}
-          </button>
+          {isAdmin && (
+            <button className="botao-primario" onClick={migrarArquivosLocais} disabled={migrando}>
+              <Upload size={17} /> {migrando ? 'Migrando...' : 'Migrar para a nuvem'}
+            </button>
+          )}
         </section>
       )}
 
@@ -738,7 +772,7 @@ export default function DarkFiberDetalhes() {
             <p>Organize as imagens por site, POP, CEO, torre ou outro local.</p>
           </div>
 
-          {!pastaFotoAtiva ? (
+          {isAdmin && (!pastaFotoAtiva ? (
             <button className="botao-primario" onClick={criarPastaFotos}>
               <FolderPlus size={17} /> Nova pasta
             </button>
@@ -750,7 +784,7 @@ export default function DarkFiberDetalhes() {
             >
               <Upload size={17} /> {uploadingFoto ? 'Enviando...' : 'Adicionar foto'}
             </button>
-          )}
+          ))}
 
           <input ref={inputFoto} type="file" accept="image/*" hidden onChange={enviarFoto} />
         </div>
@@ -777,12 +811,14 @@ export default function DarkFiberDetalhes() {
                         </span>
                       </button>
                       <div className="dark-photo-folder-actions">
-                        <button onClick={() => renomearPastaFotos(pasta)} title="Renomear pasta">
-                          <Pencil size={16} />
-                        </button>
-                        <button className="danger" onClick={() => excluirPastaFotos(pasta)} title="Excluir pasta">
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (<>
+                          <button onClick={() => renomearPastaFotos(pasta)} title="Renomear pasta">
+                            <Pencil size={16} />
+                          </button>
+                          <button className="danger" onClick={() => excluirPastaFotos(pasta)} title="Excluir pasta">
+                            <Trash2 size={16} />
+                          </button>
+                        </>)}
                       </div>
                     </article>
                   );
@@ -831,9 +867,11 @@ export default function DarkFiberDetalhes() {
                     </a>
                     <div>
                       <span title={foto.nome}>{foto.nome}</span>
-                      <button className="danger" onClick={() => excluirFoto(foto)} title="Excluir foto">
-                        <Trash2 size={17} />
-                      </button>
+                      {isAdmin && (
+                        <button className="danger" onClick={() => excluirFoto(foto)} title="Excluir foto">
+                          <Trash2 size={17} />
+                        </button>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -849,9 +887,11 @@ export default function DarkFiberDetalhes() {
             <h2><Activity size={20} /> Curvas OTDR</h2>
             <p>Cadastre medições nos dois sentidos do circuito.</p>
           </div>
-          <button className="botao-primario" onClick={() => setModal(true)}>
-            <Plus size={17} /> Adicionar curva
-          </button>
+          {isAdmin && (
+            <button className="botao-primario" onClick={() => setModal(true)}>
+              <Plus size={17} /> Adicionar curva
+            </button>
+          )}
         </div>
 
         {todasCurvas.length === 0 ? (
@@ -876,9 +916,11 @@ export default function DarkFiberDetalhes() {
                   <button onClick={() => abrirCurva(curva, true)} title="Baixar">
                     <Download size={17} />
                   </button>
-                  <button className="danger" onClick={() => excluirCurva(curva)}>
-                    <Trash2 size={17} />
-                  </button>
+                  {isAdmin && (
+                    <button className="danger" onClick={() => excluirCurva(curva)}>
+                      <Trash2 size={17} />
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -887,7 +929,7 @@ export default function DarkFiberDetalhes() {
       </section>
 
       <OtdrModal
-        aberto={modal}
+        aberto={isAdmin && modal}
         aoFechar={() => setModal(false)}
         aoSalvar={salvarCurva}
         origem={item.origem || 'Origem'}

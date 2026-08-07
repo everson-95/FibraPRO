@@ -1,0 +1,9 @@
+FibraPRO v6.15 - Correções solicitadas
+
+- Dark Fiber: botão de excluir no menu principal agora aparece somente para administrador autenticado.
+- Dark Fiber: botão de baixar curvas OTDR agora força o download do arquivo em vez de apenas visualizar.
+- Dark Fiber: download de KMZ/KML também foi ajustado para baixar o arquivo.
+- FTTH: adicionado botão compacto de detalhes nos cards.
+- FTTH: detalhes de cabo, tipo de cabo, quantidade de fibras, origem, destino, distância e observações.
+- FTTH: administrador pode editar e salvar os detalhes no Firebase.
+- FTTH: download de KMZ/KML ajustado para baixar o arquivo.

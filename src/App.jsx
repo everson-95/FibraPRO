@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 
 import Dashboard from "./pages/Dashboard";
+import POPs from "./pages/POPs";
+import POPDetalhes from "./pages/POPDetalhes";
 import Backbone from "./pages/Backbone";
 import FTTH from "./pages/FTTH";
 import FTTHDetalhes from "./pages/FTTHDetalhes";
@@ -36,6 +38,9 @@ function App() {
           <Routes>
 
             <Route path="/" element={<Dashboard />} />
+
+            <Route path="/pops" element={<POPs />} />
+            <Route path="/pops/:id" element={<POPDetalhes />} />
 
             <Route path="/backbone" element={<Backbone />} />
 

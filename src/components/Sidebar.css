@@ -7,6 +7,12 @@
   position: fixed;
   top: 0;
   left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  z-index: 100;
 }
 
 .sidebar-logo {
@@ -59,3 +65,7 @@
   cursor: default;
   opacity: 0.55;
 }.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 6px 22px;border-bottom:1px solid #263244}.sidebar-logo img{width:54px;height:54px;object-fit:contain;border-radius:12px;background:#000}.sidebar-logo div{min-width:0}.sidebar-logo h2{font-size:22px}.sidebar-logo span{line-height:1.25;max-width:145px}.sidebar-status{position:absolute;bottom:18px;left:22px;color:#94a3b8;font-size:11px}.sidebar-status i{display:inline-block;width:7px;height:7px;background:#22c55e;border-radius:50%;margin-right:7px}@media(max-width:800px){.sidebar{position:static;width:100%;min-height:auto}.sidebar-menu{display:grid;grid-template-columns:repeat(2,1fr)}.sidebar-status{display:none}}
+.sidebar-admin{position:absolute;left:16px;right:16px;bottom:48px}.sidebar-admin button{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #334155;background:#1f2937;color:#e2e8f0;padding:10px;border-radius:9px;cursor:pointer}.sidebar-admin button:hover{background:#263449}.admin-active{display:block;text-align:center;color:#86efac;font-size:11px;margin-bottom:7px}.admin-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.72);z-index:9999;display:grid;place-items:center;padding:20px}.admin-modal{width:min(420px,100%);background:#fff;border-radius:16px;padding:28px;position:relative;box-shadow:0 25px 70px rgba(0,0,0,.35)}.admin-close{position:absolute;right:14px;top:14px;border:0;background:transparent;cursor:pointer}.admin-icon{width:52px;height:52px;border-radius:14px;background:#dbeafe;color:#2563eb;display:grid;place-items:center}.admin-modal h2{margin:16px 0 6px;color:#111827}.admin-modal p{margin:0 0 20px;color:#64748b}.admin-modal form{display:grid;gap:14px}.admin-modal label{display:grid;gap:6px;font-weight:600;color:#334155}.admin-modal input{padding:12px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}.admin-submit{padding:12px;border:0;border-radius:9px;background:#2563eb;color:white;font-weight:700;cursor:pointer}.admin-error{background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px;font-size:13px}@media(max-width:800px){.sidebar-admin{position:static;margin-top:14px}.sidebar-status{display:none}}
+
+/* Administração sempre visível, logo abaixo da marca */
+.sidebar-admin{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;margin:0 0 18px;padding:0 2px;flex-shrink:0}.sidebar-admin button{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #3b82f6;background:#1d4ed8;color:#fff;padding:11px;border-radius:9px;cursor:pointer;font-weight:700}.sidebar-admin button:hover{background:#2563eb}.sidebar-admin .admin-login-button{box-shadow:0 0 0 1px rgba(96,165,250,.15)}.sidebar-menu{flex:1}.sidebar-status{position:static!important;left:auto!important;bottom:auto!important;margin:16px 6px 0;padding-top:12px;border-top:1px solid #263244;flex-shrink:0}.admin-active{display:block;text-align:center;color:#86efac;font-size:12px;font-weight:700;margin-bottom:7px}@media(max-width:800px){.sidebar{height:auto;overflow:visible}.sidebar-admin{margin:0 0 14px}.sidebar-status{display:none!important}}

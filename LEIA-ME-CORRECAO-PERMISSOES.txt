@@ -1,0 +1,8 @@
+CORREÇÃO DE PERMISSÕES - FibraPRO
+
+- Botões de exclusão ficam ocultos para usuários não administradores.
+- Exclusão de fotos, pastas, curvas OTDR, KMZ/KML, FTTH, CEOs, cabos e fusões foi protegida.
+- Botões de cadastro, upload e edição também foram limitados ao administrador nos módulos corrigidos.
+- O administrador continua sendo identificado pelo UID configurado no AuthContext.
+
+IMPORTANTE: depois de testar o login, publique também as regras seguras do Firestore e Storage para impedir alterações mesmo por chamadas externas.

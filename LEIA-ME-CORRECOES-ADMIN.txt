@@ -1,0 +1,21 @@
+FIBRAPRO - CORRECOES DE ADMINISTRACAO E EDICAO
+
+Alteracoes aplicadas:
+- Botao Administracao agora fica logo abaixo da marca FibraPRO na barra lateral.
+- Barra lateral ganhou rolagem para o botao nao desaparecer em telas menores.
+- Botao Editar aparece nos cards de Backbone.
+- Botao Editar aparece nos cards de Clientes Dedicados.
+- Antes do login, os botoes aparecem com cadeado.
+- Ao clicar em Editar/Nova rota/Novo cliente sem login, a tela de Administracao abre automaticamente.
+- Depois do login com o UID administrador, os formularios de edicao ficam liberados.
+
+COMO INICIAR:
+1. Extraia o ZIP.
+2. Abra o terminal dentro da pasta fibrapro_v6.
+3. Execute: npm install
+4. Execute: npm run dev
+5. Abra o endereco mostrado pelo Vite.
+
+IMPORTANTE:
+- Nao publique ainda as regras restritas do Firestore/Storage antes de testar o login.
+- O UID autorizado no projeto e: uGqrREimmTew1vmPhWQw99Y6viB3

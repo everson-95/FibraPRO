@@ -20,6 +20,7 @@ import {
 
 import './Backbone.css';
 import './DarkFiber.css';
+import { useAuth } from '../context/AuthContext';
 
 const vazio = {
   cliente: '',
@@ -43,6 +44,7 @@ function normalizarCliente(valor) {
 }
 
 export default function DarkFiber() {
+  const { isAdmin } = useAuth();
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [modal, setModal] = useState(false);
@@ -194,14 +196,16 @@ export default function DarkFiber() {
           </p>
         </div>
 
-        <button
-          className="botao-nova-rota"
-          type="button"
-          onClick={() => setModal(true)}
-        >
-          <Plus size={18} />
-          Novo circuito
-        </button>
+        {isAdmin && (
+          <button
+            className="botao-nova-rota"
+            type="button"
+            onClick={() => setModal(true)}
+          >
+            <Plus size={18} />
+            Novo circuito
+          </button>
+        )}
       </div>
 
       <div className="dark-search">
@@ -335,14 +339,16 @@ export default function DarkFiber() {
                             <ArrowRight size={18} />
                           </Link>
 
-                          <button
-                            className="dark-delete"
-                            type="button"
-                            title="Excluir circuito"
-                            onClick={() => excluir(item.id)}
-                          >
-                            <Trash2 size={19} />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              className="dark-delete"
+                              type="button"
+                              title="Excluir circuito"
+                              onClick={() => excluir(item.id)}
+                            >
+                              <Trash2 size={19} />
+                            </button>
+                          )}
                         </div>
                       </article>
                     ))}

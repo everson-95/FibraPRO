@@ -28,11 +28,13 @@ import {
 } from "lucide-react";
 
 import { rotasBackbone } from "../data/rotas";
+import useFirestoreDocument from "../hooks/useFirestoreDocument";
 
 import MapaRota from "../components/mapa/MapaRota";
 import OtdrModal from "../components/OtdrModal";
 
 import "./RotaDetalhes.css";
+import { useAuth } from '../context/AuthContext';
 
 const BANCO_OTDR = "fibrapro-arquivos";
 const VERSAO_BANCO = 1;
@@ -280,6 +282,7 @@ function TerminacaoCard({
 }
 
 function RotaDetalhes() {
+  const { isAdmin } = useAuth();
   const { id } = useParams();
 
   const [modalAberto, setModalAberto] =
@@ -288,9 +291,11 @@ function RotaDetalhes() {
   const [curvasOtdr, setCurvasOtdr] =
     useState([]);
 
-  const rota = rotasBackbone.find(
+  const rotaPadrao = rotasBackbone.find(
     (item) => item.id === id
   );
+  const { item: rotaNuvem, loading: rotaLoading } = useFirestoreDocument("rotasBackbone", id);
+  const rota = rotaNuvem ? { ...rotaPadrao, ...rotaNuvem } : rotaPadrao;
 
   const chaveLocalStorage =
     `fibrapro-otdr-${id}`;
@@ -458,6 +463,7 @@ function RotaDetalhes() {
   }
 
   async function excluirCurva(curva) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     const confirmar =
       window.confirm(
         `Excluir a curva da ${curva.fibra}?`
@@ -515,6 +521,10 @@ function RotaDetalhes() {
     ).toLocaleDateString(
       "pt-BR"
     );
+  }
+
+  if (rotaLoading && !rotaPadrao) {
+    return <div className="rota-nao-encontrada"><h2>Carregando rota...</h2></div>;
   }
 
   if (!rota) {
@@ -650,10 +660,12 @@ function RotaDetalhes() {
             </p>
           </div>
 
-          <button className="botao-primario">
-            <Upload size={17} />
-            Upload KMZ
-          </button>
+          {isAdmin && (
+            <button className="botao-primario">
+              <Upload size={17} />
+              Upload KMZ
+            </button>
+          )}
         </div>
 
         <div className="mapa-rota-card">
@@ -674,15 +686,15 @@ function RotaDetalhes() {
             </p>
           </div>
 
-          <button
-            className="botao-primario"
-            onClick={() =>
-              setModalAberto(true)
-            }
-          >
-            <Upload size={17} />
-            Upload OTDR
-          </button>
+          {isAdmin && (
+            <button
+              className="botao-primario"
+              onClick={() => setModalAberto(true)}
+            >
+              <Upload size={17} />
+              Upload OTDR
+            </button>
+          )}
         </div>
 
         {curvasOtdr.length === 0 ? (
@@ -700,15 +712,15 @@ function RotaDetalhes() {
               para documentar esta rota.
             </p>
 
-            <button
-              className="botao-adicionar-otdr"
-              onClick={() =>
-                setModalAberto(true)
-              }
-            >
-              <Upload size={17} />
-              Adicionar primeira curva
-            </button>
+            {isAdmin && (
+              <button
+                className="botao-adicionar-otdr"
+                onClick={() => setModalAberto(true)}
+              >
+                <Upload size={17} />
+                Adicionar primeira curva
+              </button>
+            )}
           </div>
         ) : (
           <div className="otdr-lista">
@@ -839,19 +851,15 @@ function RotaDetalhes() {
                         Baixar
                       </button>
 
-                      <button
-                        className="botao-excluir-otdr"
-                        onClick={() =>
-                          excluirCurva(
-                            curva
-                          )
-                        }
-                      >
-                        <Trash2
-                          size={16}
-                        />
-                        Excluir
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className="botao-excluir-otdr"
+                          onClick={() => excluirCurva(curva)}
+                        >
+                          <Trash2 size={16} />
+                          Excluir
+                        </button>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -920,7 +928,7 @@ function RotaDetalhes() {
       </section>
 
       <OtdrModal
-        aberto={modalAberto}
+        aberto={isAdmin && modalAberto}
         aoFechar={() =>
           setModalAberto(false)
         }

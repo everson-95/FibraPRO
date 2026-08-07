@@ -139,4 +139,8 @@
 
 .botao-abrir-rota:hover {
   background: #1d4ed8;
-}
+}.backbone-actions{display:flex;gap:10px;align-items:center;margin-top:auto}.backbone-actions .botao-abrir-rota{flex:1}.backbone-edit{display:flex;align-items:center;gap:7px;border:1px solid #cbd5e1;background:#fff;color:#334155;padding:10px 12px;border-radius:9px;cursor:pointer;font-weight:700}.backbone-edit:hover{background:#f8fafc}
+.admin-locked{opacity:.72;filter:saturate(.75)}
+.backbone-edit.admin-locked{border-color:#64748b;background:#e2e8f0;color:#475569}
+.botao-nova-rota.admin-locked{background:#475569}
+.backbone-actions .backbone-edit{min-height:43px;white-space:nowrap}

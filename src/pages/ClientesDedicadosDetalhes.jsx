@@ -5,16 +5,59 @@ import MapaRota from '../components/mapa/MapaRota';
 import useFirestoreDocument from '../hooks/useFirestoreDocument';
 import { observeCloudAttachments, saveCloudAttachment, deleteCloudAttachment, downloadDataUrl } from '../services/cloudFiles';
 import { parseMapFile } from '../utils/kmz';
-import './DarkFiber.css'; import './ClientesDedicados.css';
-function safe(value){const n=Number(String(value??'').replace(',','.'));return Number.isFinite(n)?n:null}
+import { useAuth } from '../context/AuthContext';
+import './DarkFiber.css';
+import './ClientesDedicados.css';
+
+function safe(value){
+  const n=Number(String(value??'').replace(',','.'));
+  return Number.isFinite(n)?n:null;
+}
+
 export default function ClientesDedicadosDetalhes(){
- const {id}=useParams(); const {item,loading:itemLoading}=useFirestoreDocument('clientesDedicados',id); const [files,setFiles]=useState([]);const [loading,setLoading]=useState(false);const [error,setError]=useState('');const input=useRef();
+ const {id}=useParams();
+ const {isAdmin}=useAuth();
+ const {item,loading:itemLoading}=useFirestoreDocument('clientesDedicados',id);
+ const [files,setFiles]=useState([]);
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState('');
+ const input=useRef();
+
  useEffect(()=>observeCloudAttachments('clientesDedicados',id,'kmz',setFiles,console.error),[id]);
+
+ const fallback=useMemo(()=>{
+   if(!item)return [];
+   const lat=safe(item.latitude),lng=safe(item.longitude);
+   return lat!==null&&lng!==null?[{id:`cliente-${id}`,name:item.nome,description:item.rota,kind:'cliente',position:[lat,lng]}]:[];
+ },[item,id]);
+ const tracks=useMemo(()=>files.flatMap(f=>f.tracks||[]),[files]);
+ const markers=useMemo(()=>files.flatMap(f=>f.markers||[]),[files]);
+
+ async function enviar(e){
+   const file=e.target.files?.[0];e.target.value='';if(!file)return;
+   setLoading(true);setError('');
+   try{
+     const parsed=await parseMapFile(file);
+     await saveCloudAttachment({parentType:'clientesDedicados',parentId:id,category:'kmz',file,extra:{tracks:parsed.tracks,markers:parsed.markers,trechos:parsed.tracks.length,pontos:parsed.markers.length}});
+   }catch(err){setError(err.message||'Não foi possível ler o arquivo.')}finally{setLoading(false)}
+ }
+ async function excluir(meta){if(!confirm('Excluir este KMZ/KML?'))return;await deleteCloudAttachment(meta.id)}
+
  if(itemLoading)return <div className="dark-empty">Carregando da nuvem...</div>;
  if(!item)return <div className="dark-empty"><h2>Cliente não encontrado</h2><Link to="/clientes-dedicados">Voltar</Link></div>;
- async function enviar(e){const file=e.target.files?.[0];e.target.value='';if(!file)return;setLoading(true);setError('');try{const parsed=await parseMapFile(file);await saveCloudAttachment({parentType:'clientesDedicados',parentId:id,category:'kmz',file,extra:{tracks:parsed.tracks,markers:parsed.markers,trechos:parsed.tracks.length,pontos:parsed.markers.length}})}catch(err){setError(err.message||'Não foi possível ler o arquivo.')}finally{setLoading(false)}}
- async function excluir(meta){if(!confirm('Excluir este KMZ/KML?'))return;await deleteCloudAttachment(meta.id)}
- const fallback=useMemo(()=>{const lat=safe(item.latitude),lng=safe(item.longitude);return lat!==null&&lng!==null?[{id:`cliente-${id}`,name:item.nome,description:item.rota,kind:'cliente',position:[lat,lng]}]:[]},[item,id]);
- const tracks=files.flatMap(f=>f.tracks||[]),markers=files.flatMap(f=>f.markers||[]);
- return <div className="dark-page"><Link className="voltar-link" to="/clientes-dedicados"><ArrowLeft size={17}/> Voltar para Clientes Dedicados</Link><header className="dark-header"><div><span className="pagina-identificacao">Circuito dedicado</span><h1>{item.nome}</h1><p>{item.rota||`${item.origem||'Origem'} → ${item.destino||'Destino'}`}</p></div><span className="dark-status">{item.status}</span></header><div className="dark-detail-grid"><section className="dark-panel"><h2><Building2 size={20}/> Dados técnicos</h2><dl><div><dt>Velocidade</dt><dd>{item.velocidade||'—'}</dd></div><div><dt>Fibra</dt><dd>{item.fibra||'—'}</dd></div><div><dt>VLAN</dt><dd>{item.vlan||'—'}</dd></div><div><dt>IP</dt><dd>{item.ip||'—'}</dd></div><div><dt>Porta</dt><dd>{item.portaSwitch||'—'}</dd></div><div><dt>DIO</dt><dd>{item.dio||'—'}</dd></div></dl></section><section className="dark-panel"><h2><MapPin size={20}/> Trajeto</h2><dl><div><dt>Origem</dt><dd>{item.origem||'—'}</dd></div><div><dt>Destino</dt><dd>{item.destino||'—'}</dd></div><div><dt>SFP</dt><dd>{item.sfp||'—'}</dd></div><div><dt>Observações</dt><dd>{item.observacao||'—'}</dd></div></dl></section></div><section className="dark-panel"><div className="dark-section-head"><div><h2><MapPin size={20}/> Mapa do circuito</h2><p>O mapa fica sincronizado entre todos os dispositivos.</p></div><button className="botao-primario" onClick={()=>input.current?.click()} disabled={loading}><Upload size={17}/>{loading?'Processando...':'Adicionar KMZ/KML'}</button><input ref={input} hidden type="file" accept=".kmz,.kml" onChange={enviar}/></div>{error&&<div className="ftth-map-error">{error}</div>}<MapaRota points={markers.length?markers:fallback} tracks={tracks} center={fallback[0]?.position} enableLocation showLayerControl height={520}/>{files.length>0&&<div className="kmz-list">{files.map(f=><article key={f.id}><div><FileArchive size={18}/><span><strong>{f.nome}</strong><small>{f.trechos||0} trecho(s) · {f.pontos||0} ponto(s)</small></span></div><div><button onClick={()=>downloadDataUrl(f.dataUrl,f.nome)}><Download size={17}/></button><button className="danger" onClick={()=>excluir(f)}><Trash2 size={17}/></button></div></article>)}</div>}</section></div>
+
+ return <div className="dark-page">
+  <Link className="voltar-link" to="/clientes-dedicados"><ArrowLeft size={17}/> Voltar para Clientes Dedicados</Link>
+  <header className="dark-header"><div><span className="pagina-identificacao">Circuito dedicado</span><h1>{item.nome}</h1><p>{item.rota||`${item.origem||'Origem'} → ${item.destino||'Destino'}`}</p></div><span className="dark-status">{item.status}</span></header>
+  <div className="dark-detail-grid">
+   <section className="dark-panel"><h2><Building2 size={20}/> Dados técnicos</h2><dl><div><dt>Velocidade</dt><dd>{item.velocidade||'—'}</dd></div><div><dt>Fibra</dt><dd>{item.fibra||'—'}</dd></div><div><dt>VLAN</dt><dd>{item.vlan||'—'}</dd></div><div><dt>IP</dt><dd>{item.ip||'—'}</dd></div><div><dt>Porta</dt><dd>{item.portaSwitch||'—'}</dd></div><div><dt>DIO</dt><dd>{item.dio||'—'}</dd></div></dl></section>
+   <section className="dark-panel"><h2><MapPin size={20}/> Trajeto</h2><dl><div><dt>Origem</dt><dd>{item.origem||'—'}</dd></div><div><dt>Destino</dt><dd>{item.destino||'—'}</dd></div><div><dt>SFP</dt><dd>{item.sfp||'—'}</dd></div><div><dt>Observações</dt><dd>{item.observacao||'—'}</dd></div></dl></section>
+  </div>
+  <section className="dark-panel">
+   <div className="dark-section-head"><div><h2><MapPin size={20}/> Mapa do circuito</h2><p>O mapa fica sincronizado entre todos os dispositivos.</p></div>{isAdmin&&<><button className="botao-primario" onClick={()=>input.current?.click()} disabled={loading}><Upload size={17}/>{loading?'Processando...':'Adicionar KMZ/KML'}</button><input ref={input} hidden type="file" accept=".kmz,.kml" onChange={enviar}/></>}</div>
+   {error&&<div className="ftth-map-error">{error}</div>}
+   <MapaRota points={markers.length?markers:fallback} tracks={tracks} center={fallback[0]?.position} enableLocation showLayerControl height={520}/>
+   {files.length>0&&<div className="kmz-list">{files.map(f=><article key={f.id}><div><FileArchive size={18}/><span><strong>{f.nome}</strong><small>{f.trechos||0} trecho(s) · {f.pontos||0} ponto(s)</small></span></div><div><button onClick={()=>downloadDataUrl(f.dataUrl,f.nome)}><Download size={17}/></button>{isAdmin&&<button className="danger" onClick={()=>excluir(f)}><Trash2 size={17}/></button>}</div></article>)}</div>}
+  </section>
+ </div>;
 }

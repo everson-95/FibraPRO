@@ -1,0 +1,21 @@
+FibraPRO - Módulo POPs
+
+Esta versão adiciona o módulo POPs acima de Backbone na barra lateral.
+
+Incluído:
+- Cadastro, edição, pesquisa e exclusão de POPs (admin).
+- Dados: nome, sigla, cidade, endereço, coordenadas, Google Maps, responsável, telefone, status e observações.
+- Ao criar um POP, são criadas automaticamente pastas de fotos: Fachada, Rack, DIO, Switch, OLT, CEO, Torre, Energia e Geral.
+- Fotos por pasta no Firebase Storage/Firestore.
+- Cadastro de equipamentos.
+- Cadastro de DIOs com quantidade de portas e descrição individual de cada porta/fibra.
+- Cadastro de switches com quantidade de portas, IP/modelo e descrição individual de cada porta.
+- Cadastro de energia (retificadora, baterias, nobreak, gerador etc.).
+- Documentos do POP no Firebase Storage.
+- Permissões seguem o modo Administração já existente.
+
+Teste local:
+npm install
+npm run dev
+
+Depois de validar, faça o commit/push a partir do projeto oficial ligado ao GitHub/Vercel.

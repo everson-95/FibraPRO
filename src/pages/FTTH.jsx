@@ -8,22 +8,31 @@ import {
   Plus,
   Search,
   Trash2,
-  Upload
+  Upload,
+  Info
 } from 'lucide-react';
 import useFirestoreCollection from '../hooks/useFirestoreCollection';
 import { createRecord, deleteRecord } from '../services/firestoreCrud';
 import { criarCaminhoArquivo, uploadFile } from '../services/storage';
 import { salvarAnexo } from '../services/anexos';
+import { useAuth } from '../context/AuthContext';
 import './FTTH.css';
 
 const formularioInicial = {
   nome: '',
   cidade: '',
   observacao: '',
-  status: 'Operacional'
+  status: 'Operacional',
+  cabo: '',
+  tipoCabo: '',
+  quantidadeFibras: '',
+  origem: '',
+  destino: '',
+  distancia: ''
 };
 
 export default function FTTH() {
+  const { isAdmin } = useAuth();
   const {
     items: redes,
     loading,
@@ -74,7 +83,13 @@ export default function FTTH() {
         nome: formulario.nome.trim(),
         cidade: formulario.cidade.trim(),
         observacao: formulario.observacao.trim(),
-        status: formulario.status
+        status: formulario.status,
+        cabo: formulario.cabo.trim(),
+        tipoCabo: formulario.tipoCabo.trim(),
+        quantidadeFibras: formulario.quantidadeFibras.trim(),
+        origem: formulario.origem.trim(),
+        destino: formulario.destino.trim(),
+        distancia: formulario.distancia.trim()
       });
 
       if (arquivo) {
@@ -111,6 +126,7 @@ export default function FTTH() {
   }
 
   async function excluirRede(id) {
+    if (!isAdmin) { window.dispatchEvent(new Event('open-admin-login')); return; }
     if (!confirm('Excluir esta pasta de rede FTTH? Os arquivos devem ser removidos antes na tela da rede.')) {
       return;
     }
@@ -132,9 +148,11 @@ export default function FTTH() {
           <p>Pastas das redes FTTH com arquivos KMZ/KML disponíveis para a equipe técnica.</p>
         </div>
 
-        <button type="button" onClick={() => setModal(true)}>
-          <Plus size={17} /> Nova rede FTTH
-        </button>
+        {isAdmin && (
+          <button type="button" onClick={() => setModal(true)}>
+            <Plus size={17} /> Nova rede FTTH
+          </button>
+        )}
       </header>
 
       <div className="ftth-toolbar">
@@ -188,14 +206,24 @@ export default function FTTH() {
                 <Link className="abrir-ftth" to={`/ftth/${rede.id}`}>
                   <ArrowRight size={16} /> Abrir pasta
                 </Link>
-                <button
-                  type="button"
-                  className="excluir-ftth"
-                  title="Excluir pasta"
-                  onClick={() => excluirRede(rede.id)}
+                <Link
+                  className="detalhes-ftth"
+                  to={`/ftth/${rede.id}`}
+                  title="Abrir detalhes da rede"
+                  aria-label="Abrir detalhes da rede"
                 >
-                  <Trash2 size={16} />
-                </button>
+                  <Info size={17} />
+                </Link>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="excluir-ftth"
+                    title="Excluir pasta"
+                    onClick={() => excluirRede(rede.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             </article>
           ))}
@@ -243,6 +271,60 @@ export default function FTTH() {
                   <option>Manutenção</option>
                   <option>Desativada</option>
                 </select>
+              </label>
+
+              <label>
+                <span>Identificação do cabo</span>
+                <input
+                  value={formulario.cabo}
+                  onChange={evento => setFormulario({ ...formulario, cabo: evento.target.value })}
+                  placeholder="Ex.: Cabo principal AS80"
+                />
+              </label>
+
+              <label>
+                <span>Tipo do cabo</span>
+                <input
+                  value={formulario.tipoCabo}
+                  onChange={evento => setFormulario({ ...formulario, tipoCabo: evento.target.value })}
+                  placeholder="Ex.: AS80 12FO"
+                />
+              </label>
+
+              <label>
+                <span>Quantidade de fibras</span>
+                <input
+                  value={formulario.quantidadeFibras}
+                  onChange={evento => setFormulario({ ...formulario, quantidadeFibras: evento.target.value })}
+                  placeholder="Ex.: 12"
+                />
+              </label>
+
+              <label>
+                <span>Distância</span>
+                <input
+                  value={formulario.distancia}
+                  onChange={evento => setFormulario({ ...formulario, distancia: evento.target.value })}
+                  placeholder="Ex.: 8,5 km"
+                />
+              </label>
+
+              <label>
+                <span>Origem</span>
+                <input
+                  value={formulario.origem}
+                  onChange={evento => setFormulario({ ...formulario, origem: evento.target.value })}
+                  placeholder="Ex.: POP Malacacheta"
+                />
+              </label>
+
+              <label>
+                <span>Destino</span>
+                <input
+                  value={formulario.destino}
+                  onChange={evento => setFormulario({ ...formulario, destino: evento.target.value })}
+                  placeholder="Ex.: Bairro Centro"
+                />
               </label>
 
               <label className="full">

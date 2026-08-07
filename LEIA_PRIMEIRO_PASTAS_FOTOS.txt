@@ -1,0 +1,22 @@
+FIBRAPRO - PASTAS DE FOTOS NO DARK FIBER
+
+Alterações:
+- Criar pastas de fotos por site/local.
+- Abrir pasta e enviar fotos somente dentro dela.
+- Renomear e excluir pastas.
+- Excluir pasta também remove as fotos dela do Firebase Storage e Firestore.
+- Fotos antigas sem pasta continuam disponíveis em "Fotos antigas sem pasta".
+- Sincronização pelo Firebase entre notebook e celular.
+
+Teste:
+1. npm install
+2. npm run dev
+3. Abra um circuito Dark Fiber.
+4. Em Fotos do circuito, clique em Nova pasta.
+5. Abra a pasta e envie uma foto.
+6. Confira em guia anônima e no celular.
+
+Publicação:
+git add src/pages/DarkFiberDetalhes.jsx src/pages/DarkFiber.css src/services/anexos.js
+git commit -m "Organiza fotos do Dark Fiber em pastas"
+git push
